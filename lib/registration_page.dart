@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'login_page.dart';
 import 'dashboard_page.dart';
 import 'api_service.dart';
@@ -86,8 +87,12 @@ class _RegistrationPageState extends State<RegistrationPage> {
       setState(() => _isLoading = false);
 
       if (success) {
+        // 💾 ذخیره وضعیت در حافظه
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('access_token', 'temp_registered_token');
+        await prefs.setBool('is_company', _isCompany);
+
         if (mounted) {
-          // انتقال به داشبورد اختصاصی (دانشجو یا شرکت) بر اساس مقدار _isCompany
           Navigator.pushAndRemoveUntil(
             context,
             MaterialPageRoute(

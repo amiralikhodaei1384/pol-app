@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'registration_page.dart';
 import 'dashboard_page.dart';
 import 'api_service.dart';
@@ -43,8 +44,7 @@ class _LoginPageState extends State<LoginPage> {
     if (_formKeyStep2.currentState!.validate()) {
       setState(() => _isLoading = true);
 
-      // تعریف به صورت dynamic برای جلوگیری از خطای تشخیص نوع String در دارت
-      final dynamic loginResult = await ApiService.login(
+      final loginResult = await ApiService.login(
         _emailController.text.trim(),
         _passwordController.text,
       );
@@ -52,12 +52,13 @@ class _LoginPageState extends State<LoginPage> {
       setState(() => _isLoading = false);
 
       if (loginResult != null) {
-        bool isCompany = false;
+        bool isCompany = loginResult['role'] == 'company_rep';
+        String token = loginResult['access_token'] ?? '';
 
-        // بررسی اینکه آیا پاسخ دریافتی Map است یا خیر
-        if (loginResult is Map) {
-          isCompany = loginResult['isCompany'] == true;
-        }
+        // 💾 ذخیره توکن و نقش کاربر در حافظه دستگاه
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('access_token', token);
+        await prefs.setBool('is_company', isCompany);
 
         if (mounted) {
           Navigator.pushAndRemoveUntil(

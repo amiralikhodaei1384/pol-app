@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-
+import 'package:shared_preferences/shared_preferences.dart';
+import 'login_page.dart';
 class DashboardPage extends StatefulWidget {
   final bool isCompany; // مشخص‌کننده نقش کاربر (دانشجو یا شرکت)
 
@@ -595,6 +596,23 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                 _buildNavItem(Icons.person_outline, 'پروفایل من'),
                 _buildNavItem(Icons.settings_outlined, 'تنظیمات'),
                 _buildNavItem(Icons.help_outline, 'راهنما'),
+                _buildNavItem(
+                  Icons.exit_to_app,
+                  'خروج از حساب',
+                  onTap: () async {
+                    // پاک کردن توکن از حافظه
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.clear();
+
+                    if (mounted) {
+                      Navigator.pushAndRemoveUntil(
+                        context,
+                        MaterialPageRoute(builder: (context) => const LoginPage()),
+                            (route) => false,
+                      );
+                    }
+                  },
+                ),
               ],
             ),
           ),
@@ -614,22 +632,28 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     );
   }
 
-  Widget _buildNavItem(IconData icon, String title, {bool isActive = false, String? badge}) {
+  Widget _buildNavItem(IconData icon, String title, {bool isActive = false, String? badge, VoidCallback? onTap}) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-      decoration: BoxDecoration(color: isActive ? Colors.white.withOpacity(0.15) : Colors.transparent, borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(
+        color: isActive ? Colors.white.withOpacity(0.15) : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+      ),
       child: ListTile(
         leading: Icon(icon, color: Colors.white, size: 20),
         title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 12)),
         trailing: badge != null
             ? Container(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(color: const Color(0xFF00E676), borderRadius: BorderRadius.circular(10)),
+          decoration: BoxDecoration(
+            color: const Color(0xFF00E676),
+            borderRadius: BorderRadius.circular(10),
+          ),
           child: Text(badge, style: const TextStyle(fontSize: 10, color: Colors.black, fontWeight: FontWeight.bold)),
         )
             : null,
         dense: true,
-        onTap: () {},
+        onTap: onTap ?? () {}, // دریافت onTap برای خروج از حساب
       ),
     );
   }
@@ -1099,6 +1123,24 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
                 _buildNavItem(Icons.chat_bubble_outline, 'پیام‌ها', badge: '4'),
                 _buildNavItem(Icons.settings_outlined, 'پروفایل شرکت'),
                 _buildNavItem(Icons.help_outline, 'راهنما'),
+                _buildNavItem(
+                  Icons.exit_to_app,
+                  'خروج از حساب',
+                  onTap: () async {
+                    // پاک کردن توکن از حافظه
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.clear();
+
+                    if (mounted) {
+                      Navigator.pushAndRemoveUntil(
+                        context,
+                        MaterialPageRoute(builder: (context) => const LoginPage()),
+                            (route) => false,
+                      );
+                    }
+                  },
+                ),
+
               ],
             ),
           ),
@@ -1118,22 +1160,28 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
     );
   }
 
-  Widget _buildNavItem(IconData icon, String title, {bool isActive = false, String? badge}) {
+  Widget _buildNavItem(IconData icon, String title, {bool isActive = false, String? badge, VoidCallback? onTap}) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-      decoration: BoxDecoration(color: isActive ? Colors.white.withOpacity(0.15) : Colors.transparent, borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(
+        color: isActive ? Colors.white.withOpacity(0.15) : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+      ),
       child: ListTile(
         leading: Icon(icon, color: Colors.white, size: 20),
         title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 12)),
         trailing: badge != null
             ? Container(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(color: const Color(0xFF00E676), borderRadius: BorderRadius.circular(10)),
+          decoration: BoxDecoration(
+            color: const Color(0xFF00E676),
+            borderRadius: BorderRadius.circular(10),
+          ),
           child: Text(badge, style: const TextStyle(fontSize: 10, color: Colors.black, fontWeight: FontWeight.bold)),
         )
             : null,
         dense: true,
-        onTap: () {},
+        onTap: onTap ?? () {}, // دریافت onTap برای خروج از حساب
       ),
     );
   }
