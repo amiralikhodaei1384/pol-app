@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware # ۱. این خط اضافه شد
-from app.api import auth
+from app.api import auth , projects
 from app.db.base import Base
 from app.db.session import engine
 
@@ -20,7 +20,7 @@ app.add_middleware(
 
 # اضافه کردن مسیرهای احراز هویت
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
-
+app.include_router(projects.router , prefix = "/projects" , tags=["projects"])
 @app.get("/")
 def read_root():
     return {"message": "Welcome to Pol Platform API"}

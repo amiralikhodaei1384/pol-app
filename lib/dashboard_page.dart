@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pol_app/create_project_modal.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'login_page.dart';
 class DashboardPage extends StatefulWidget {
@@ -775,7 +776,7 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
           if (!isMobile) ...[
             const SizedBox(width: 12),
             ElevatedButton.icon(
-              onPressed: () {},
+              onPressed: () => _openCreateProjectModal(context),
               icon: const Icon(Icons.add, size: 18),
               label: const Text('پروژه جدید', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
               style: ElevatedButton.styleFrom(
@@ -852,7 +853,7 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
                 ),
                 const SizedBox(height: 20),
                 ElevatedButton(
-                  onPressed: () {},
+                  onPressed: () => _openCreateProjectModal(context),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF00E676),
                     foregroundColor: Colors.black87,
@@ -1117,7 +1118,11 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
               padding: EdgeInsets.zero,
               children: [
                 _buildNavItem(Icons.dashboard, 'داشبورد کارفرما', isActive: true),
-                _buildNavItem(Icons.add_box_outlined, 'ثبت پروژه جدید'),
+                _buildNavItem(
+                  Icons.add_box_outlined,
+                  'ثبت پروژه جدید',
+                  onTap: () => _openCreateProjectModal(context), // <--- اینجا
+                ),
                 _buildNavItem(Icons.assignment_outlined, 'پروژه‌های ما'),
                 _buildNavItem(Icons.people_outline, 'بانک رزومه‌ها'),
                 _buildNavItem(Icons.chat_bubble_outline, 'پیام‌ها', badge: '4'),
@@ -1184,5 +1189,16 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
         onTap: onTap ?? () {}, // دریافت onTap برای خروج از حساب
       ),
     );
+  }
+  void _openCreateProjectModal(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => const CreateProjectModal(),
+    );
+
+    if (result == true) {
+      // در صورت موفقیت‌آمیز بودن ثبت پروژه، لیست پروژه‌ها را رفرش کنید
+      setState(() {});
+    }
   }
 }

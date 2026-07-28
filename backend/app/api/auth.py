@@ -1,11 +1,42 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
+from jose import jwt, JWTError
 from ..db.session import get_db
 from ..models import models
 from ..schemas import schemas
 from ..core import security
 
 router = APIRouter()
+
+# تعریف ساختار خواندن توکن از هدر Authorization
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+
+# تابع احراز هویت کاربر جاری بر اساس توکن JWT ارسال شده
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> models.User:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="اعتبارسنجی ناپایدار/توکن نامعتبر است یا منقضی شده.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        if hasattr(security, 'decode_token'):
+            payload = security.decode_token(token)
+        else:
+            SECRET_KEY = getattr(security, 'SECRET_KEY', 'SECRET_KEY')
+            ALGORITHM = getattr(security, 'ALGORITHM', 'HS256')
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+
+        email: str = payload.get("sub")
+        if email is None:
+            raise credentials_exception
+    except Exception:
+        raise credentials_exception
+
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if user is None:
+        raise credentials_exception
+    return user
 
 @router.post("/register", response_model=schemas.UserOut)
 def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
@@ -35,13 +66,12 @@ def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
         )
         db.add(profile)
     elif user_in.role == models.UserRole.COMPANY_REP:
-        # Check if company exists or create new
         company = db.query(models.Company).filter(models.Company.national_id == user_in.national_id).first()
         if not company:
             company = models.Company(
                 name=user_in.company_name,
                 national_id=user_in.national_id,
-                address=user_in.company_address # ذخیره آدرس جدید شرکت در دیتابیس
+                address=user_in.company_address
             )
             db.add(company)
             db.commit()
@@ -58,7 +88,6 @@ def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=schemas.Token)
 def login(login_data: schemas.UserLogin, db: Session = Depends(get_db)):
-    # 1. Find user by email (username)
     user = db.query(models.User).filter(models.User.email == login_data.username).first()
     if not user or not security.verify_password(login_data.password, user.password_hash):
         raise HTTPException(
@@ -67,7 +96,6 @@ def login(login_data: schemas.UserLogin, db: Session = Depends(get_db)):
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # 2. Create JWT Token
     access_token = security.create_access_token(
         data={"sub": user.email, "role": user.role}
     )
