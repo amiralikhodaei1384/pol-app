@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'api_service.dart';
 
 class CreateProjectModal extends StatefulWidget {
   const CreateProjectModal({super.key});
@@ -93,7 +94,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
       final token = prefs.getString('access_token') ?? '';
 
       // آدرس API بک‌اند خود را در اینجا وارد کنید
-      final url = Uri.parse('http://10.0.2.2:8000/projects/');
+      final url = Uri.parse('${ApiService.baseUrl}/projects/');
 
       final response = await http.post(
         url,

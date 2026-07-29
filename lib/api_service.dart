@@ -1,10 +1,18 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  // اگر روی شبیه‌ساز اندروید تست می‌کنید از http://10.0.2.2:8000 استفاده کنید
-  // اگر روی ویندوز یا وب تست می‌کنید http://127.0.0.1:8000 درست است
-  static const String baseUrl = "http://127.0.0.1:8000";
+  // تشخیص هوشمند آدرس سرور متناسب با محیط اجرا (وب، اندروید، ویندوز)
+  static String get baseUrl {
+    if (kIsWeb) {
+      return "http://127.0.0.1:8000"; // اجرا روی وب/کروم
+    } else if (defaultTargetPlatform == TargetPlatform.android) {
+      return "http://10.0.2.2:8000"; // اجرا روی شبیه‌ساز اندروید
+    } else {
+      return "http://127.0.0.1:8000"; // اجرا روی ویندوز یا بقیه
+    }
+  }
 
   static Future<bool> register({
     required String email,
@@ -22,7 +30,6 @@ class ApiService {
         "company_name": isCompany ? companyName : null,
         "national_id": isCompany ? nationalId : null,
         "company_address": isCompany ? companyAddress : null,
-        // اصلاح ارور: فرستادن نام شرکت یا عنوان به جای null
         "full_name": isCompany ? (companyName ?? "نماینده شرکت") : "دانشجوی جدید",
       };
 
@@ -32,16 +39,9 @@ class ApiService {
         body: jsonEncode(bodyData),
       );
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        print("ثبت‌نام با موفقیت انجام شد.");
-        return true;
-      } else {
-        // پرینت دقیق ارور بک‌اند در کنسول VS Code / Android Studio
-        print("خطا در ثبت‌نام (کد ${response.statusCode}): ${response.body}");
-        return false;
-      }
+      return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
-      print("خطای اتصال یا شبکه: $e");
+      print("خطا در ثبت‌نام: $e");
       return false;
     }
   }
@@ -51,22 +51,46 @@ class ApiService {
       final response = await http.post(
         Uri.parse("$baseUrl/auth/login"),
         headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "username": email,
-          "password": password,
-        }),
-      );
+        body: jsonEncode({"username": email, "password": password}),
+      ).timeout(const Duration(seconds: 5)); // تعیین تایم‌اوت ۵ ثانیه‌ای جهت جلوگیری از معطلی
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data; // بازگرداندن پاسخ کامل شامل access_token و نقش کاربر
+        return jsonDecode(response.body);
       } else {
-        print("خطا در ورود: ${response.body}");
+        print("خطای پاسخ سرور: ${response.body}");
         return null;
       }
     } catch (e) {
-      print("خطای شبکه در ورود: $e");
+      print("خطای ارتباط با سرور: $e");
       return null;
     }
+  }
+
+  static Future<List<dynamic>> fetchAllProjects() async {
+    try {
+      final response = await http.get(Uri.parse("$baseUrl/projects/")).timeout(const Duration(seconds: 5));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+    } catch (e) {
+      print("خطا در دریافت پروژه‌ها: $e");
+    }
+    return [];
+  }
+
+  static Future<List<dynamic>> fetchMyProjects(String token) async {
+    try {
+      final response = await http.get(
+        Uri.parse("$baseUrl/projects/my-projects"),
+        headers: {"Authorization": "Bearer $token"},
+      ).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+    } catch (e) {
+      print("خطا در دریافت پروژه‌های من: $e");
+    }
+    return [];
   }
 }

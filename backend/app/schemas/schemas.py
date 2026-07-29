@@ -61,11 +61,18 @@ class ProjectCreate(BaseModel):
     requires_interview: bool = Field(default=True, description="گزینه نیاز به مصاحبه/ملاقات حضوری")
     weights: Optional[MatchingWeights] = Field(default_factory=MatchingWeights, description="وزن‌دهی تطبیق (اختیاری)")
 
+class CompanyOut(BaseModel):
+    id: UUID
+    name: str
+    class Config:
+        from_attributes = True
+
 class ProjectOut(ProjectCreate):
     id: UUID
     company_id: UUID
     created_at: datetime
     is_active: bool = True
+    company: Optional[CompanyOut] = None  # اضافه شدن اطلاعات شرکت
 
     class Config:
         from_attributes = True

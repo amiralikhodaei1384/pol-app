@@ -21,14 +21,14 @@ def reset_and_seed_db():
     db = SessionLocal()
     try:
         # هش کردن رمز عبور مشترک برای تست
-        common_password = security.get_password_hash("password123")
+        common_password = security.get_password_hash("amir")
 
         # -----------------------------------------------
         # ۱. ساخت کاربر دانشجو
         # -----------------------------------------------
         print("👤 در حال ساخت کاربر دانشجو...")
         student_user = models.User(
-            email="student@test.com",
+            email="amir@gmail.com",
             password_hash=common_password,
             role=models.UserRole.STUDENT
         )
@@ -47,7 +47,7 @@ def reset_and_seed_db():
         # -----------------------------------------------
         print("🏢 در حال ساخت کاربر کارفرما و شرکت...")
         company_user = models.User(
-            email="company@test.com",
+            email="psp@gmail.com",
             password_hash=common_password,
             role=models.UserRole.COMPANY_REP
         )
@@ -73,8 +73,8 @@ def reset_and_seed_db():
         db.commit()
         print("\n🎉 دیتابیس با موفقیت ریست شد و کاربران اولیه ساخته شدند!")
         print("==================================================")
-        print("🎓 اکانت دانشجو:   student@test.com | رمز: password123")
-        print("🏢 اکانت کارفرما:  company@test.com | رمز: password123")
+        print("🎓 اکانت دانشجو:   psp@gmail.com | رمز: amir")
+        print("🏢 اکانت کارفرما:  amir@gmail.com | رمز: amir")
         print("==================================================\n")
 
     except Exception as e:
