@@ -78,7 +78,11 @@ class StudentProfile(Base):
     full_name = Column(String, nullable=False)
     bio = Column(Text, nullable=True)
     university = Column(String, nullable=True)
-    skills = Column(JSON, nullable=True)
+    major = Column(String, nullable=True)           # رشته تحصیلی
+    entrance_year = Column(Integer, nullable=True)     # سال ورود
+    skills = Column(JSON, nullable=True)              # ['Flutter', 'Python']
+    courses = Column(JSON, nullable=True)             # [{'course': 'ساختمان داده', 'grade': 18.5}]
+    portfolio_links = Column(JSON, nullable=True)      # {'github': '...', 'figma': '...'}
     completion_percentage = Column(Integer, default=0)
 
     user = relationship("User", back_populates="student_profile")

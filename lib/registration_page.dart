@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'login_page.dart';
 import 'dashboard_page.dart';
+import 'student_profile_builder_page.dart'; // <--- صفحه پروفایل‌ساز اضافه شد
 import 'api_service.dart';
 import 'widgets/rotating_border.dart';
 import 'background.dart';
@@ -76,32 +77,55 @@ class _RegistrationPageState extends State<RegistrationPage> {
       }
 
       setState(() => _isLoading = true);
-      final success = await ApiService.register(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
+
+      final email = _emailController.text.trim();
+      final password = _passwordController.text;
+
+      // ۱. ثبت‌نام در بک‌اند
+      final registerSuccess = await ApiService.register(
+        email: email,
+        password: password,
         isCompany: _isCompany,
         companyName: _isCompany ? _companyNameController.text.trim() : null,
         nationalId: _isCompany ? _nationalIdController.text.trim() : null,
         companyAddress: _isCompany ? _companyAddressController.text.trim() : null,
       );
-      setState(() => _isLoading = false);
 
-      if (success) {
-        // 💾 ذخیره وضعیت در حافظه
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('access_token', 'temp_registered_token');
-        await prefs.setBool('is_company', _isCompany);
+      if (registerSuccess) {
+        // ۲. ورود خودکار پس از ثبت‌نام برای گرفتن توکن واقعی JWT
+        final loginData = await ApiService.login(email, password);
+        setState(() => _isLoading = false);
 
-        if (mounted) {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(
-              builder: (context) => DashboardPage(isCompany: _isCompany),
-            ),
-                (route) => false,
-          );
+        if (loginData != null && loginData['access_token'] != null) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('access_token', loginData['access_token']);
+          await prefs.setBool('is_company', _isCompany);
+
+          if (mounted) {
+            if (!_isCompany) {
+              // 🎓 اگر دانشجو است -> هدایت خودکار به صفحه پروفایل‌ساز ۳ مرحله‌ای
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (context) => const StudentProfileBuilderPage()),
+                    (route) => false,
+              );
+            } else {
+              // 🏢 اگر شرکت است -> هدایت به داشبورد کارفرما
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (context) => const DashboardPage(isCompany: true)),
+                    (route) => false,
+              );
+            }
+          }
+        } else {
+          // اگر ورود خودکار ناموفق بود، کاربر به صفحه لاگین هدایت می‌شود
+          if (mounted) {
+            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginPage()));
+          }
         }
       } else {
+        setState(() => _isLoading = false);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('خطا در ثبت‌نام یا ایمیل تکراری')),
@@ -133,6 +157,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                         'assets/Untitled_design-removebg-preview.png',
                         height: 180,
                         fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) => const Icon(Icons.school, size: 80, color: Color(0xFF0072FF)),
                       ),
                     ),
                     const SizedBox(height: 5),
@@ -233,7 +258,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
           _buildTextField(
             controller: _emailController,
-            hint: _isCompany ? 'ایمیل سازمانی' : 'ایمیل دانشجویی (ac.ir)',
+            hint: _isCompany ? 'ایمیل سازمانی' : 'ایمیل دانشجویی',
             icon: _isCompany ? Icons.email_outlined : Icons.school_outlined,
             keyboardType: TextInputType.emailAddress,
           ),
@@ -274,18 +299,10 @@ class _RegistrationPageState extends State<RegistrationPage> {
           const SizedBox(height: 12),
           _buildTextField(
             controller: _nationalIdController,
-            hint: 'شناسه ملی شرکت',
+            hint: 'شناسه ملی شرکت (اختیاری)',
             icon: Icons.badge_outlined,
             keyboardType: TextInputType.number,
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'این فیلد اجباری است';
-              }
-              if (value.length != 11) {
-                return 'شناسه ملی باید ۱۱ رقم باشد';
-              }
-              return null;
-            },
+            validator: (value) => null, // اختیاری برای تست سریع
           ),
           const SizedBox(height: 12),
           _buildTextField(
@@ -387,10 +404,11 @@ class _RegistrationPageState extends State<RegistrationPage> {
       keyboardType: keyboardType,
       textAlign: TextAlign.right,
       style: const TextStyle(color: Color(0xFF1E293B)),
-      validator: validator ?? (value) {
-        if (value == null || value.isEmpty) return 'این فیلد اجباری است';
-        return null;
-      },
+      validator: validator ??
+              (value) {
+            if (value == null || value.isEmpty) return 'این فیلد اجباری است';
+            return null;
+          },
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14),

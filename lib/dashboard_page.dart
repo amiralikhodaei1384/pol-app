@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:pol_app/api_service.dart';
 import 'package:pol_app/create_project_modal.dart';
+import 'package:pol_app/student_profile_builder_page.dart';
+import 'package:pol_app/student_profile_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'login_page.dart';
-
+import 'package:pol_app/project_details_page.dart';
 class DashboardPage extends StatefulWidget {
-  final bool isCompany; // مشخص‌کننده نقش کاربر (دانشجو یا شرکت)
+  final bool isCompany;
 
   const DashboardPage({super.key, this.isCompany = false});
 
@@ -16,7 +18,6 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   @override
   Widget build(BuildContext context) {
-    // بر اساس نقش کاربر، داشبورد مربوطه نمایش داده می‌شود
     return widget.isCompany ? const CompanyDashboardView() : const StudentDashboardView();
   }
 }
@@ -36,21 +37,49 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
   List<dynamic> _projectsList = [];
   bool _isLoadingProjects = true;
 
+  // اطلاعات پروفایل کاربر
+  String _studentName = 'دانشجوی کارمَچ';
+  String _university = 'دانشگاه تهران';
+  String _email = '';
+
   @override
   void initState() {
     super.initState();
-    _loadProjects();
+    _loadDashboardData();
   }
 
-  Future<void> _loadProjects() async {
+  Future<void> _loadDashboardData() async {
     setState(() => _isLoadingProjects = true);
-    final projects = await ApiService.fetchAllProjects();
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('access_token') ?? '';
+
+    // ارسال توکن جهت دریافت لیست پروژه‌ها
+    final projects = await ApiService.fetchAllProjects(token);
+
+    if (token.isNotEmpty) {
+      final userData = await ApiService.getMe(token);
+      if (userData != null) {
+        _email = userData['email'] ?? '';
+        if (userData['profile'] != null) {
+          _studentName = userData['profile']['full_name'] ?? _studentName;
+          _university = userData['profile']['university'] ?? _university;
+        }
+      }
+    }
+
     if (mounted) {
       setState(() {
         _projectsList = projects;
         _isLoadingProjects = false;
       });
     }
+  }
+
+  void _openProfileBuilder() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const StudentProfilePage()),
+    ).then((_) => _loadDashboardData()); // رفرش خودکار اطلاعات داشبورد پس از ویرایش
   }
 
   Future<void> _logout() async {
@@ -93,7 +122,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                     _buildTopBar(context, isMobile: isMobile),
                     Expanded(
                       child: RefreshIndicator(
-                        onRefresh: _loadProjects,
+                        onRefresh: _loadDashboardData,
                         child: SingleChildScrollView(
                           padding: EdgeInsets.all(isMobile ? 16 : 24),
                           child: Row(
@@ -172,33 +201,14 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
               ),
             ),
           ),
-          if (!isMobile) ...[
-            const SizedBox(width: 12),
-            ElevatedButton.icon(
-              onPressed: () {},
-              icon: const Icon(Icons.tune, size: 16),
-              label: const Text('جستجوی پیشرفته', style: TextStyle(fontSize: 12)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: const Color(0xFF1E6AFB),
-                elevation: 0,
-                side: const BorderSide(color: Color(0xFFE5E7EB)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              ),
-            ),
-          ],
-          const SizedBox(width: 16),
-          _buildTopBarIcon(Icons.chat_bubble_outline, hasBadge: true),
-          const SizedBox(width: 10),
-          _buildTopBarIcon(Icons.notifications_none, hasBadge: true, badgeCount: '3'),
           const SizedBox(width: 16),
 
-          // پروفایل با منوی کشویی خروج
+          // پروفایل با منوی کشویی و بازکردن صفحه ویرایش
           PopupMenuButton<String>(
             offset: const Offset(0, 45),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             onSelected: (value) {
+              if (value == 'profile') _openProfileBuilder();
               if (value == 'logout') _logout();
             },
             itemBuilder: (context) => [
@@ -208,7 +218,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                   children: [
                     Icon(Icons.person_outline, size: 18, color: Colors.black87),
                     SizedBox(width: 8),
-                    Text('پروفایل من', style: TextStyle(fontSize: 12)),
+                    Text('ویرایش پروفایل من', style: TextStyle(fontSize: 12)),
                   ],
                 ),
               ),
@@ -227,41 +237,11 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
             child: CircleAvatar(
               radius: 18,
               backgroundColor: Colors.grey[200],
-              child: ClipOval(
-                child: Image.network(
-                  'https://i.pravatar.cc/150?u=ali_ut',
-                  width: 36,
-                  height: 36,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => const Icon(Icons.person, color: Colors.grey, size: 20),
-                ),
-              ),
+              child: const Icon(Icons.person, color: Color(0xFF1E6AFB), size: 20),
             ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildTopBarIcon(IconData icon, {bool hasBadge = false, String badgeCount = ''}) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Icon(icon, color: Colors.black54, size: 24),
-        if (hasBadge)
-          Positioned(
-            top: -2,
-            right: -2,
-            child: CircleAvatar(
-              radius: 7,
-              backgroundColor: Colors.red,
-              child: Text(
-                badgeCount.isEmpty ? '●' : badgeCount,
-                style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
-              ),
-            ),
-          )
-      ],
     );
   }
 
@@ -276,66 +256,27 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
         ),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Stack(
-        children: [
-          Padding(
-            padding: EdgeInsets.all(isMobile ? 20.0 : 36.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'بدون سابقه کار،\nروی پروژه‌های واقعی کار کن',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: isMobile ? 18 : 24,
-                    fontWeight: FontWeight.bold,
-                    height: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  width: isMobile ? double.infinity : 350,
-                  child: const Text(
-                    'با شرکت‌های معتبر آشنا شو، حضوری پروژه بگیر و مسیر شغلی‌ات را بساز.',
-                    style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.5),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00E676),
-                    foregroundColor: Colors.black87,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('جستجو برای پروژه‌ها', style: TextStyle(fontWeight: FontWeight.bold)),
-                      SizedBox(width: 8),
-                      Icon(Icons.arrow_back_ios, size: 12, textDirection: TextDirection.ltr),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (!isMobile)
-            Positioned(
-              left: 40,
-              bottom: 0,
-              top: 0,
-              child: Center(
-                child: Icon(
-                  Icons.laptop_mac_outlined,
-                  size: 140,
-                  color: Colors.white.withOpacity(0.15),
-                ),
+      child: Padding(
+        padding: EdgeInsets.all(isMobile ? 20.0 : 36.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'سلام $_studentName 👋\nبدون سابقه کار، روی پروژه‌های واقعی کار کن',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: isMobile ? 18 : 22,
+                fontWeight: FontWeight.bold,
+                height: 1.4,
               ),
-            )
-        ],
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'با شرکت‌های معتبر آشنا شو، حضوری پروژه بگیر و مسیر شغلی‌ات را بساز.',
+              style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.5),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -345,14 +286,9 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         const Text('پروژه‌های پیشنهادی برای شما', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
-        TextButton(
-          onPressed: _loadProjects,
-          child: const Row(
-            children: [
-              Text('بروزرسانی', style: TextStyle(fontSize: 12, color: Color(0xFF1E6AFB))),
-              Icon(Icons.refresh, size: 16, color: Color(0xFF1E6AFB)),
-            ],
-          ),
+        IconButton(
+          icon: const Icon(Icons.refresh, size: 18, color: Color(0xFF1E6AFB)),
+          onPressed: _loadDashboardData,
         ),
       ],
     );
@@ -361,8 +297,8 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
   Widget _buildRecommendedProjectsList({required bool isMobile}) {
     if (_isLoadingProjects) {
       return const SizedBox(
-        height: 180,
-        child: Center(child: CircularProgressIndicator()),
+        height: 200,
+        child: Center(child: CircularProgressIndicator(color: Color(0xFF1E6AFB))),
       );
     }
 
@@ -377,12 +313,12 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
 
     if (isMobile) {
       return SizedBox(
-        height: 230,
+        height: 265, // ارتفاع کارت‌ها برای جاگیری دکمه‌ها تنظیم شد
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
           itemCount: _projectsList.length,
           separatorBuilder: (context, index) => const SizedBox(width: 16),
-          itemBuilder: (context, index) => _buildProjectCard(_projectsList[index], width: 260),
+          itemBuilder: (context, index) => _buildProjectCard(_projectsList[index], width: 280),
         ),
       );
     }
@@ -395,18 +331,26 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
   }
 
   Widget _buildProjectCard(dynamic item, {double? width}) {
-    final companyName = item['company'] != null ? item['company']['name'] : 'شرکت فناوری';
+    final companyName = item['company_name'] ?? (item['company'] != null ? item['company']['name'] : 'شرکت فناوری');
     final skills = (item['required_skills'] as List<dynamic>?)?.cast<String>() ?? [];
     final deadline = item['deadline'] != null ? item['deadline'].toString().split('T')[0] : 'نامشخص';
+    final matchScore = item['match_score'] ?? 80;
 
     return Container(
       width: width,
-      height: 230,
+      height: 250,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          )
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -416,120 +360,71 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(6)),
-                child: const Text('تطابق جدید', style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold)),
+                decoration: BoxDecoration(color: const Color(0xFFECFDF5), borderRadius: BorderRadius.circular(6)),
+                child: Text('$matchScore٪ تطابق هوشمند', style: const TextStyle(color: Color(0xFF047857), fontSize: 10, fontWeight: FontWeight.bold)),
               ),
-              Row(
-                children: [
-                  Text(companyName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                  const SizedBox(width: 6),
-                  CircleAvatar(
-                    radius: 12,
-                    backgroundColor: Colors.blue.withOpacity(0.1),
-                    child: Text(companyName.isNotEmpty ? companyName[0] : 'ش', style: const TextStyle(color: Color(0xFF1E6AFB), fontSize: 10, fontWeight: FontWeight.bold)),
-                  ),
-                ],
-              ),
+              Text(companyName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF1E6AFB))),
             ],
           ),
-          const SizedBox(height: 14),
-          Text(item['title'] ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, height: 1.4)),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
+          Text(item['title'] ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, height: 1.4, color: Color(0xFF1E293B))),
+          const SizedBox(height: 6),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(color: const Color(0xFFECEFF1), borderRadius: BorderRadius.circular(4)),
+            decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(4)),
             child: Text(item['project_type'] ?? 'پروژه', style: const TextStyle(color: Colors.black54, fontSize: 9)),
           ),
-          const Spacer(),
+          const SizedBox(height: 8),
           Row(
             children: [
               const Icon(Icons.calendar_today_outlined, size: 11, color: Colors.grey),
               const SizedBox(width: 4),
               Expanded(child: Text('مهلت: $deadline', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 9, color: Colors.grey))),
-              const Icon(Icons.location_on_outlined, size: 11, color: Colors.grey),
-              const SizedBox(width: 4),
-              const Text('تهران، حضوری', style: TextStyle(fontSize: 9, color: Colors.grey)),
             ],
           ),
-          const SizedBox(height: 10),
+          const Spacer(),
           Wrap(
             spacing: 6,
             runSpacing: 4,
             children: skills.take(3).map((skill) {
               return Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(color: const Color(0xFFF3F4F6), borderRadius: BorderRadius.circular(4), border: Border.all(color: const Color(0xFFE5E7EB))),
+                decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(4), border: Border.all(color: const Color(0xFFE2E8F0))),
                 child: Text(skill, style: const TextStyle(fontSize: 9, color: Colors.black87)),
               );
             }).toList(),
-          )
+          ),
+          const SizedBox(height: 12),
+
+          // تک‌دکمه کامل «مشاهده جزئیات پروژه» برای دانشجو
+          SizedBox(
+            width: double.infinity,
+            height: 36,
+            child: ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ProjectDetailsPage(project: item, isCompany: false),
+                  ),
+                ).then((_) => _loadDashboardData());
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1E6AFB),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('مشاهده جزئیات پروژه', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+            ),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildRecentRequestsSection({required bool isMobile}) {
-    final List<Map<String, String>> requests = [
-      {'title': 'طراحی وبسایت سازمانی', 'company': 'پارس آنلاین', 'status': 'در انتظار بررسی', 'statusColor': 'orange', 'date': '۲۴ خرداد ۱۴۰۵'},
-      {'title': 'توسعه API پرداخت', 'company': 'زرین پال', 'status': 'تعیین وقت شده', 'statusColor': 'green', 'date': '۲۲ خرداد ۱۴۰۵'}
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text('درخواست‌های اخیر', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
-            TextButton(
-              onPressed: () {},
-              child: const Row(children: [Text('مشاهده همه', style: TextStyle(fontSize: 12, color: Color(0xFF1E6AFB))), Icon(Icons.keyboard_arrow_left, size: 16)]),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        ListView.separated(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: requests.length,
-          separatorBuilder: (context, index) => const SizedBox(height: 8),
-          itemBuilder: (context, index) {
-            final req = requests[index];
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE5E7EB))),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(req['title']!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                        const SizedBox(height: 4),
-                        Text(req['company']!, style: const TextStyle(color: Colors.grey, fontSize: 11)),
-                      ],
-                    ),
-                  ),
-                  _buildStatusBadge(req['status']!, req['statusColor']!),
-                  if (!isMobile) ...[const SizedBox(width: 32), Text(req['date']!, style: const TextStyle(color: Colors.grey, fontSize: 11))]
-                ],
-              ),
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatusBadge(String text, String colorName) {
-    final Color bgColor = colorName == 'green' ? const Color(0xFFE8F5E9) : const Color(0xFFFFF3E0);
-    final Color textColor = colorName == 'green' ? Colors.green : Colors.orange;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(6)),
-      child: Text(text, style: TextStyle(color: textColor, fontSize: 10, fontWeight: FontWeight.bold)),
-    );
+    return Container();
   }
 
   Widget _buildLeftColumnContent(BuildContext context) {
@@ -543,29 +438,31 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
             children: [
               const Row(children: [Text('تکمیل پروفایل', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))]),
               const SizedBox(height: 16),
-              Stack(
+              const Stack(
                 alignment: Alignment.center,
                 children: [
                   SizedBox(
                     width: 70,
                     height: 70,
                     child: CircularProgressIndicator(
-                      value: 0.72,
+                      value: 1.0,
                       strokeWidth: 6,
-                      backgroundColor: Colors.grey.shade100,
-                      valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF00C853)),
+                      backgroundColor: Colors.grey,
+                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00C853)),
                     ),
                   ),
-                  const Text('۷۲٪', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87))
+                  Text('۱۰۰٪', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87))
                 ],
               ),
               const SizedBox(height: 14),
-              const Text('پروفایل کامل شانس دریافت پروژه‌های بهتر را افزایش می‌دهد.', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Colors.grey, height: 1.4)),
+              const Text('پروفایل شما کامل است و بیشترین شانس تطبیق را دارید.', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Colors.grey, height: 1.4)),
               const SizedBox(height: 14),
+
+              // دکمه ویرایش پروفایل
               OutlinedButton(
-                onPressed: () {},
+                onPressed: _openProfileBuilder,
                 style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFF1E6AFB)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), minimumSize: const Size(double.infinity, 36)),
-                child: const Text('ادامه تکمیل پروفایل', style: TextStyle(fontSize: 11, color: Color(0xFF1E6AFB))),
+                child: const Text('ویرایش و مشاهده پروفایل', style: TextStyle(fontSize: 11, color: Color(0xFF1E6AFB))),
               )
             ],
           ),
@@ -589,44 +486,15 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                 ],
               ),
               const SizedBox(height: 16),
-              const Row(children: [Icon(Icons.school_outlined, size: 18, color: Colors.grey), SizedBox(width: 8), Text('دانشجوی دانشگاه تهران', style: TextStyle(fontSize: 12, color: Colors.black87))]),
+              Row(children: [const Icon(Icons.person_outline, size: 18, color: Colors.grey), const SizedBox(width: 8), Text(_studentName, style: const TextStyle(fontSize: 12, color: Colors.black87))]),
               const SizedBox(height: 8),
-              const Row(children: [Icon(Icons.mail_outline, size: 18, color: Colors.grey), SizedBox(width: 8), Text('ali@ut.ac.ir', style: TextStyle(fontSize: 12, color: Colors.black87))]),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE5E7EB))),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('میانبر‌ها', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-              const SizedBox(height: 12),
-              _buildShortcutItem(Icons.edit_outlined, 'ویرایش پروفایل'),
-              _buildShortcutItem(Icons.bookmark_border, 'پروژه‌های ذخیره شده'),
-              _buildShortcutItem(Icons.description_outlined, 'نمونه قراردادها'),
-              _buildShortcutItem(Icons.quiz_outlined, 'سوالات متداول'),
+              Row(children: [const Icon(Icons.school_outlined, size: 18, color: Colors.grey), const SizedBox(width: 8), Text(_university, style: const TextStyle(fontSize: 12, color: Colors.black87))]),
+              const SizedBox(height: 8),
+              Row(children: [const Icon(Icons.mail_outline, size: 18, color: Colors.grey), const SizedBox(width: 8), Text(_email, style: const TextStyle(fontSize: 12, color: Colors.black87))]),
             ],
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildShortcutItem(IconData icon, String label) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: Colors.black54),
-          const SizedBox(width: 10),
-          Text(label, style: const TextStyle(fontSize: 12, color: Colors.black87)),
-          const Spacer(),
-          const Icon(Icons.arrow_back_ios, size: 10, color: Colors.grey),
-        ],
-      ),
     );
   }
 
@@ -644,14 +512,8 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
               children: [
                 _buildNavItem(Icons.dashboard, 'داشبورد', isActive: true),
                 _buildNavItem(Icons.star_outline, 'پروژه‌های پیشنهادی'),
-                _buildNavItem(Icons.search, 'جستجو و کشف'),
-                _buildNavItem(Icons.business_center_outlined, 'پروژه‌های من'),
-                _buildNavItem(Icons.send_outlined, 'درخواست‌ها', badge: '2'),
-                _buildNavItem(Icons.chat_bubble_outline, 'پیام‌ها', badge: '1'),
-                _buildNavItem(Icons.business_outlined, 'شرکت‌ها'),
-                _buildNavItem(Icons.person_outline, 'پروفایل من'),
+                _buildNavItem(Icons.person_outline, 'پروفایل من', onTap: _openProfileBuilder), // <--- متصل شد
                 _buildNavItem(Icons.settings_outlined, 'تنظیمات'),
-                _buildNavItem(Icons.help_outline, 'راهنما'),
                 _buildNavItem(
                   Icons.exit_to_app,
                   'خروج از حساب',
@@ -676,7 +538,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     );
   }
 
-  Widget _buildNavItem(IconData icon, String title, {bool isActive = false, String? badge, VoidCallback? onTap}) {
+  Widget _buildNavItem(IconData icon, String title, {bool isActive = false, VoidCallback? onTap}) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
       decoration: BoxDecoration(
@@ -686,16 +548,6 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
       child: ListTile(
         leading: Icon(icon, color: Colors.white, size: 20),
         title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 12)),
-        trailing: badge != null
-            ? Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(
-            color: const Color(0xFF00E676),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text(badge, style: const TextStyle(fontSize: 10, color: Colors.black, fontWeight: FontWeight.bold)),
-        )
-            : null,
         dense: true,
         onTap: onTap ?? () {},
       ),
@@ -758,14 +610,13 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
     );
 
     if (result == true) {
-      _loadMyProjects(); // رفرش خودکار پروژه‌ها پس از افزودن
+      _loadMyProjects();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
-    final bool isDesktop = screenWidth >= 1150;
     final bool isMobile = screenWidth < 700;
 
     return Directionality(
@@ -792,36 +643,14 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
                         onRefresh: _loadMyProjects,
                         child: SingleChildScrollView(
                           padding: EdgeInsets.all(isMobile ? 16 : 24),
-                          child: Row(
+                          child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(
-                                flex: 3,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    _buildCompanyBanner(context, isMobile: isMobile),
-                                    const SizedBox(height: 28),
-                                    _buildActiveProjectsHeader(),
-                                    const SizedBox(height: 16),
-                                    _buildActiveProjectsList(isMobile: isMobile),
-                                    const SizedBox(height: 28),
-                                    _buildRecentApplicantsSection(isMobile: isMobile),
-
-                                    if (!isDesktop) ...[
-                                      const SizedBox(height: 32),
-                                      _buildLeftColumnContent(context),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                              if (isDesktop) ...[
-                                const SizedBox(width: 24),
-                                SizedBox(
-                                  width: 290,
-                                  child: _buildLeftColumnContent(context),
-                                ),
-                              ],
+                              _buildCompanyBanner(context, isMobile: isMobile),
+                              const SizedBox(height: 28),
+                              _buildActiveProjectsHeader(),
+                              const SizedBox(height: 16),
+                              _buildActiveProjectsList(isMobile: isMobile),
                             ],
                           ),
                         ),
@@ -850,71 +679,20 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
             ),
             const SizedBox(width: 8),
           ],
-          Expanded(
-            child: Container(
-              height: 46,
-              decoration: BoxDecoration(color: const Color(0xFFF3F4F6), borderRadius: BorderRadius.circular(10)),
-              child: const TextField(
-                decoration: InputDecoration(
-                  hintText: 'جستجو بین دانشجویان، مهارت‌ها یا پروژه‌ها...',
-                  hintStyle: TextStyle(fontSize: 13, color: Colors.grey),
-                  prefixIcon: Icon(Icons.search, color: Colors.grey, size: 20),
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(vertical: 10),
-                ),
-              ),
-            ),
+          const Spacer(),
+          ElevatedButton.icon(
+            onPressed: () => _openCreateProjectModal(context),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('پروژه جدید', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E6AFB), foregroundColor: Colors.white),
           ),
-          if (!isMobile) ...[
-            const SizedBox(width: 12),
-            ElevatedButton.icon(
-              onPressed: () => _openCreateProjectModal(context),
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('پروژه جدید', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1E6AFB),
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              ),
-            ),
-          ],
           const SizedBox(width: 16),
-          _buildTopBarIcon(Icons.chat_bubble_outline, hasBadge: true, badgeCount: '۴'),
-          const SizedBox(width: 10),
-          _buildTopBarIcon(Icons.notifications_none, hasBadge: true, badgeCount: '۵'),
-          const SizedBox(width: 16),
-
-          // آیکون شرکت با منوی کشویی خروج
           PopupMenuButton<String>(
-            offset: const Offset(0, 45),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             onSelected: (value) {
               if (value == 'logout') _logout();
             },
             itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'profile',
-                child: Row(
-                  children: [
-                    Icon(Icons.business, size: 18, color: Colors.black87),
-                    SizedBox(width: 8),
-                    Text('پروفایل شرکت', style: TextStyle(fontSize: 12)),
-                  ],
-                ),
-              ),
-              const PopupMenuDivider(),
-              const PopupMenuItem(
-                value: 'logout',
-                child: Row(
-                  children: [
-                    Icon(Icons.exit_to_app, size: 18, color: Colors.red),
-                    SizedBox(width: 8),
-                    Text('خروج از حساب', style: TextStyle(fontSize: 12, color: Colors.red, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-              ),
+              const PopupMenuItem(value: 'logout', child: Text('خروج از حساب', style: TextStyle(color: Colors.red))),
             ],
             child: CircleAvatar(
               radius: 18,
@@ -927,28 +705,6 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
     );
   }
 
-  Widget _buildTopBarIcon(IconData icon, {bool hasBadge = false, String badgeCount = ''}) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Icon(icon, color: Colors.black54, size: 24),
-        if (hasBadge)
-          Positioned(
-            top: -2,
-            right: -2,
-            child: CircleAvatar(
-              radius: 7,
-              backgroundColor: Colors.red,
-              child: Text(
-                badgeCount.isEmpty ? '●' : badgeCount,
-                style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
-              ),
-            ),
-          )
-      ],
-    );
-  }
-
   Widget _buildCompanyBanner(BuildContext context, {required bool isMobile}) {
     return Container(
       width: double.infinity,
@@ -956,57 +712,20 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
         gradient: const LinearGradient(colors: [Color(0xFF0F52BA), Color(0xFF1E6AFB)], begin: Alignment.topRight, end: Alignment.bottomLeft),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Stack(
-        children: [
-          Padding(
-            padding: EdgeInsets.all(isMobile ? 20.0 : 36.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'استعدادهای نخبگان دانشگاهی را\nبرای پروژه‌های خود جذب کنید',
-                  style: TextStyle(color: Colors.white, fontSize: isMobile ? 18 : 24, fontWeight: FontWeight.bold, height: 1.4),
-                ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  width: isMobile ? double.infinity : 380,
-                  child: const Text(
-                    'پروژه‌های تعریف‌شده را به دانشجویان برتر بسپارید و تیم آینده شرکت خود را شکل دهید.',
-                    style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.5),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: () => _openCreateProjectModal(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00E676),
-                    foregroundColor: Colors.black87,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.add_circle_outline, size: 16),
-                      SizedBox(width: 8),
-                      Text('تعریف پروژه یا کارآموزی جدید', style: TextStyle(fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                ),
-              ],
+      child: Padding(
+        padding: EdgeInsets.all(isMobile ? 20.0 : 36.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('استعدادهای نخبگان دانشگاهی را برای پروژه‌های خود جذب کنید', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => _openCreateProjectModal(context),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E676), foregroundColor: Colors.black87),
+              child: const Text('تعریف پروژه یا کارآموزی جدید', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
-          ),
-          if (!isMobile)
-            Positioned(
-              left: 40,
-              bottom: 0,
-              top: 0,
-              child: Center(
-                child: Icon(Icons.business_center_outlined, size: 140, color: Colors.white.withOpacity(0.15)),
-              ),
-            )
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1015,59 +734,53 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text('پروژه‌های فعال شما', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
-        TextButton(
-          onPressed: _loadMyProjects,
-          child: const Row(children: [Text('بروزرسانی لیست', style: TextStyle(fontSize: 12, color: Color(0xFF1E6AFB))), Icon(Icons.refresh, size: 16, color: Color(0xFF1E6AFB))]),
-        ),
+        const Text('پروژه‌های ثبت‌شده شما', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        IconButton(icon: const Icon(Icons.refresh, color: Color(0xFF1E6AFB)), onPressed: _loadMyProjects),
       ],
     );
   }
 
   Widget _buildActiveProjectsList({required bool isMobile}) {
     if (_isLoadingMyProjects) {
-      return const SizedBox(
-        height: 180,
-        child: Center(child: CircularProgressIndicator()),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (_myProjects.isEmpty) {
       return Container(
-        width: double.infinity,
         padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE5E7EB))),
-        child: const Center(child: Text('شما هنوز هیچ پروژه‌ای ثبت نکرده‌اید.', style: TextStyle(color: Colors.grey, fontSize: 12))),
-      );
-    }
-
-    if (isMobile) {
-      return SizedBox(
-        height: 210,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: _myProjects.length,
-          separatorBuilder: (context, index) => const SizedBox(width: 16),
-          itemBuilder: (context, index) => _buildCompanyProjectCard(_myProjects[index], width: 260),
-        ),
+        width: double.infinity,
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+        child: const Text('شما هنوز پروژه‌ای ثبت نکرده‌اید.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
       );
     }
 
     return Wrap(
       spacing: 16,
       runSpacing: 16,
-      children: _myProjects.map((item) => SizedBox(width: 310, child: _buildCompanyProjectCard(item))).toList(),
+      children: _myProjects.map((item) => SizedBox(width: 300, child: _buildCompanyProjectCard(item))).toList(),
     );
   }
 
   Widget _buildCompanyProjectCard(dynamic item, {double? width}) {
     final deadline = item['deadline'] != null ? item['deadline'].toString().split('T')[0] : 'نامشخص';
+    final skills = (item['required_skills'] as List<dynamic>?)?.cast<String>() ?? [];
 
     return Container(
       width: width,
-      height: 210,
+      height: 240,
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE5E7EB))),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          )
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1086,160 +799,53 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
               )
             ],
           ),
-          const SizedBox(height: 14),
-          Text(item['title'] ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, height: 1.4)),
           const SizedBox(height: 12),
-          const Row(
+          Text(item['title'] ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, height: 1.4)),
+          const SizedBox(height: 8),
+          Row(
             children: [
-              Icon(Icons.people_alt_outlined, size: 14, color: Color(0xFF1E6AFB)),
-              SizedBox(width: 4),
-              Text('۰ متقاضی', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF1E6AFB))),
-              SizedBox(width: 12),
-              Icon(Icons.remove_red_eye_outlined, size: 14, color: Colors.grey),
-              SizedBox(width: 4),
-              Text('۱۲ بازدید', style: TextStyle(fontSize: 10, color: Colors.grey)),
+              const Icon(Icons.timer_outlined, size: 12, color: Colors.grey),
+              const SizedBox(width: 4),
+              Text('مهلت: $deadline', style: const TextStyle(fontSize: 10, color: Colors.grey)),
             ],
           ),
           const Spacer(),
-          Row(
-            children: [
-              const Icon(Icons.timer_outlined, size: 11, color: Colors.grey),
-              const SizedBox(width: 4),
-              Text('مهلت: $deadline', style: const TextStyle(fontSize: 9, color: Colors.grey)),
-            ],
+          if (skills.isNotEmpty)
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: skills.take(3).map((skill) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(4), border: Border.all(color: const Color(0xFFE2E8F0))),
+                  child: Text(skill, style: const TextStyle(fontSize: 9, color: Colors.black87)),
+                );
+              }).toList(),
+            ),
+          const SizedBox(height: 12),
+
+          // دکمه «مشاهده جزئیات پروژه» برای کارفرما
+          SizedBox(
+            width: double.infinity,
+            height: 34,
+            child: OutlinedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ProjectDetailsPage(project: item, isCompany: true),
+                  ),
+                );
+              },
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Color(0xFF1E6AFB)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('مشاهده جزئیات پروژه', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF1E6AFB))),
+            ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildRecentApplicantsSection({required bool isMobile}) {
-    final List<Map<String, String>> applicants = [
-      {'name': 'علی محمدی', 'university': 'دانشگاه تهران - علوم کامپیوتر', 'project': 'توسعه رابط کاربری', 'match': '۹۵٪ تطابق'},
-      {'name': 'سارینا رستمی', 'university': 'دانشگاه شریف - مهندسی صنایع', 'project': 'اسکرام مستری', 'match': '۸۸٪ تطابق'}
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text('متقاضیان اخیر (رزومه‌ها)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
-            TextButton(
-              onPressed: () {},
-              child: const Row(children: [Text('مشاهده همه', style: TextStyle(fontSize: 12, color: Color(0xFF1E6AFB))), Icon(Icons.keyboard_arrow_left, size: 16)]),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        ListView.separated(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: applicants.length,
-          separatorBuilder: (context, index) => const SizedBox(height: 8),
-          itemBuilder: (context, index) {
-            final app = applicants[index];
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE5E7EB))),
-              child: Row(
-                children: [
-                  CircleAvatar(radius: 18, backgroundColor: Colors.grey.shade100, child: Text(app['name']![0], style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87))),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Text(app['name']!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(4)),
-                              child: Text(app['match']!, style: const TextStyle(color: Colors.green, fontSize: 9, fontWeight: FontWeight.bold)),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text('${app['university']} • برای ${app['project']}', style: const TextStyle(color: Colors.grey, fontSize: 10)),
-                      ],
-                    ),
-                  ),
-                  OutlinedButton(
-                    onPressed: () {},
-                    style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFF1E6AFB)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))),
-                    child: const Text('مشاهده رزومه', style: TextStyle(fontSize: 10, color: Color(0xFF1E6AFB))),
-                  )
-                ],
-              ),
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLeftColumnContent(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE5E7EB))),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('خلاصه عملکرد شرکت', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildStatItem(_myProjects.length.toString(), 'پروژه فعال', Colors.blue),
-                  _buildStatItem('۲۵', 'کل رزومه‌ها', Colors.green),
-                  _buildStatItem('۲', 'مصاحبه‌ها', Colors.orange),
-                ],
-              )
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE5E7EB))),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('احراز هویت حقوقی', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(4)),
-                    child: const Text('تأیید شده', style: TextStyle(color: Colors.green, fontSize: 9, fontWeight: FontWeight.bold)),
-                  )
-                ],
-              ),
-              const SizedBox(height: 16),
-              const Row(children: [Icon(Icons.business_outlined, size: 18, color: Colors.grey), SizedBox(width: 8), Text('شرکت فناوری داده‌پردازان', style: TextStyle(fontSize: 11, color: Colors.black87))]),
-              const SizedBox(height: 8),
-              const Row(children: [Icon(Icons.badge_outlined, size: 18, color: Colors.grey), SizedBox(width: 8), Text('شناسه ملی: ۱۰۱۰۳۸۹۴۰۰', style: TextStyle(fontSize: 11, color: Colors.black87))]),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatItem(String count, String label, Color color) {
-    return Column(
-      children: [
-        Text(count, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
-        const SizedBox(height: 4),
-        Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
-      ],
     );
   }
 
@@ -1249,28 +855,14 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
       child: Column(
         children: [
           const SizedBox(height: 24),
-          _buildLogo(),
+          const Icon(Icons.domain, color: Colors.white, size: 48),
           const SizedBox(height: 32),
           Expanded(
             child: ListView(
-              padding: EdgeInsets.zero,
               children: [
                 _buildNavItem(Icons.dashboard, 'داشبورد کارفرما', isActive: true),
-                _buildNavItem(
-                  Icons.add_box_outlined,
-                  'ثبت پروژه جدید',
-                  onTap: () => _openCreateProjectModal(context),
-                ),
-                _buildNavItem(Icons.assignment_outlined, 'پروژه‌های ما'),
-                _buildNavItem(Icons.people_outline, 'بانک رزومه‌ها'),
-                _buildNavItem(Icons.chat_bubble_outline, 'پیام‌ها', badge: '4'),
-                _buildNavItem(Icons.settings_outlined, 'پروفایل شرکت'),
-                _buildNavItem(Icons.help_outline, 'راهنما'),
-                _buildNavItem(
-                  Icons.exit_to_app,
-                  'خروج از حساب',
-                  onTap: _logout,
-                ),
+                _buildNavItem(Icons.add_box_outlined, 'ثبت پروژه جدید', onTap: () => _openCreateProjectModal(context)),
+                _buildNavItem(Icons.exit_to_app, 'خروج از حساب', onTap: _logout),
               ],
             ),
           ),
@@ -1279,18 +871,7 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
     );
   }
 
-  Widget _buildLogo() {
-    return Center(
-      child: Image.asset(
-        'assets/Untitled_design-removebg-preview.png',
-        height: 85,
-        fit: BoxFit.contain,
-        errorBuilder: (context, error, stackTrace) => const Icon(Icons.domain, color: Colors.white, size: 48),
-      ),
-    );
-  }
-
-  Widget _buildNavItem(IconData icon, String title, {bool isActive = false, String? badge, VoidCallback? onTap}) {
+  Widget _buildNavItem(IconData icon, String title, {bool isActive = false, VoidCallback? onTap}) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
       decoration: BoxDecoration(
@@ -1300,16 +881,6 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
       child: ListTile(
         leading: Icon(icon, color: Colors.white, size: 20),
         title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 12)),
-        trailing: badge != null
-            ? Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(
-            color: const Color(0xFF00E676),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text(badge, style: const TextStyle(fontSize: 10, color: Colors.black, fontWeight: FontWeight.bold)),
-        )
-            : null,
         dense: true,
         onTap: onTap ?? () {},
       ),

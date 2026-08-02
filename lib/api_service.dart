@@ -3,14 +3,13 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  // تشخیص هوشمند آدرس سرور متناسب با محیط اجرا (وب، اندروید، ویندوز)
   static String get baseUrl {
     if (kIsWeb) {
-      return "http://127.0.0.1:8000"; // اجرا روی وب/کروم
+      return "http://127.0.0.1:8000";
     } else if (defaultTargetPlatform == TargetPlatform.android) {
-      return "http://10.0.2.2:8000"; // اجرا روی شبیه‌ساز اندروید
+      return "http://10.0.2.2:8000";
     } else {
-      return "http://127.0.0.1:8000"; // اجرا روی ویندوز یا بقیه
+      return "http://127.0.0.1:8000";
     }
   }
 
@@ -52,28 +51,94 @@ class ApiService {
         Uri.parse("$baseUrl/auth/login"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"username": email, "password": password}),
-      ).timeout(const Duration(seconds: 5)); // تعیین تایم‌اوت ۵ ثانیه‌ای جهت جلوگیری از معطلی
+      ).timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
-      } else {
-        print("خطای پاسخ سرور: ${response.body}");
-        return null;
       }
+      return null;
     } catch (e) {
-      print("خطای ارتباط با سرور: $e");
+      print("خطای ورود: $e");
       return null;
     }
   }
 
-  static Future<List<dynamic>> fetchAllProjects() async {
+  // دریافت اطلاعات کامل کاربر لاگین‌شده
+  static Future<Map<String, dynamic>?> getMe(String token) async {
     try {
-      final response = await http.get(Uri.parse("$baseUrl/projects/")).timeout(const Duration(seconds: 5));
+      final response = await http.get(
+        Uri.parse("$baseUrl/auth/me"),
+        headers: {"Authorization": "Bearer $token"},
+      ).timeout(const Duration(seconds: 5));
+
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       }
     } catch (e) {
-      print("خطا در دریافت پروژه‌ها: $e");
+      print("خطا در دریافت اطلاعات کاربر: $e");
+    }
+    return null;
+  }
+
+  // ذخیره و به‌روزرسانی پروفایل دانشجو
+  static Future<bool> saveStudentProfile({
+    required String token,
+    required String fullName,
+    required String university,
+    required String major,
+    required int entranceYear,
+    required List<String> skills,
+    required List<Map<String, dynamic>> courses,
+    String? githubLink,
+    String? figmaLink,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse("$baseUrl/auth/student-profile"), // <--- آدرس اصلاح شد
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+        body: jsonEncode({
+          "full_name": fullName,
+          "university": university,
+          "major": major,
+          "entrance_year": entranceYear,
+          "skills": skills,
+          "courses": courses,
+          "github_link": (githubLink != null && githubLink.isNotEmpty) ? githubLink : null,
+          "figma_link": (figmaLink != null && figmaLink.isNotEmpty) ? figmaLink : null,
+        }),
+      ).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return true;
+      } else {
+        print("خطا در ذخیره پروفایل (کد ${response.statusCode}): ${response.body}");
+        return false;
+      }
+    } catch (e) {
+      print("خطای ارتباط با سرور در ذخیره پروفایل: $e");
+      return false;
+    }
+  }
+
+  static Future<List<dynamic>> fetchAllProjects(String token) async {
+    try {
+      final response = await http.get(
+        Uri.parse("$baseUrl/projects/"),
+        headers: {
+          "Authorization": "Bearer $token", // ارسال توکن برای احراز هویت
+        },
+      ).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        print("خطا در دریافت پروژه‌ها (کد ${response.statusCode}): ${response.body}");
+      }
+    } catch (e) {
+      print("خطا در ارتباط با سرور هنگام دریافت پروژه‌ها: $e");
     }
     return [];
   }
@@ -92,5 +157,22 @@ class ApiService {
       print("خطا در دریافت پروژه‌های من: $e");
     }
     return [];
+  }
+  // ثبت درخواست برای یک پروژه توسط دانشجو
+  static Future<bool> applyForProject(String token, String projectId) async {
+    try {
+      final response = await http.post(
+        Uri.parse("$baseUrl/projects/$projectId/apply"),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+      ).timeout(const Duration(seconds: 5));
+
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      print("خطا در ارسال درخواست پروژه: $e");
+      return false;
+    }
   }
 }

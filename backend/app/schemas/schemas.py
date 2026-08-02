@@ -76,3 +76,25 @@ class ProjectOut(ProjectCreate):
 
     class Config:
         from_attributes = True
+
+class CourseGrade(BaseModel):
+    course_name: str
+    grade: float = Field(..., ge=0, le=20)
+
+class StudentProfileCreate(BaseModel):
+    full_name: str
+    university: str
+    major: str
+    entrance_year: int
+    skills: List[str]
+    courses: List[CourseGrade]
+    github_link: Optional[str] = None
+    figma_link: Optional[str] = None
+
+class StudentProfileOut(StudentProfileCreate):
+    id: UUID
+    user_id: UUID
+    completion_percentage: int
+
+    class Config:
+        from_attributes = True
