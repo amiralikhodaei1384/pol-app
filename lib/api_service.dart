@@ -84,41 +84,50 @@ class ApiService {
   static Future<bool> saveStudentProfile({
     required String token,
     required String fullName,
-    required String university,
-    required String major,
-    required int entranceYear,
+    String? phone,
+    String? birthDate,
+    String? residence,
+    String? birthPlace,
+    String? university,
+    String? major,
+    int? entranceYear,
     required List<String> skills,
     required List<Map<String, dynamic>> courses,
+    List<Map<String, dynamic>>? educations,
+    List<Map<String, dynamic>>? workExperiences,
     String? githubLink,
     String? figmaLink,
+    String? resumeFile,
   }) async {
     try {
       final response = await http.post(
-        Uri.parse("$baseUrl/auth/student-profile"), // <--- آدرس اصلاح شد
+        Uri.parse("$baseUrl/auth/student-profile"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",
         },
         body: jsonEncode({
           "full_name": fullName,
+          "phone": phone,
+          "birth_date": birthDate,
+          "residence": residence,
+          "birth_place": birthPlace,
           "university": university,
           "major": major,
           "entrance_year": entranceYear,
           "skills": skills,
           "courses": courses,
+          "educations": educations,
+          "work_experiences": workExperiences,
           "github_link": (githubLink != null && githubLink.isNotEmpty) ? githubLink : null,
           "figma_link": (figmaLink != null && figmaLink.isNotEmpty) ? figmaLink : null,
+          "resume_file": resumeFile,
         }),
       ).timeout(const Duration(seconds: 5));
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return true;
-      } else {
-        print("خطا در ذخیره پروفایل (کد ${response.statusCode}): ${response.body}");
-        return false;
-      }
+      return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
-      print("خطای ارتباط با سرور در ذخیره پروفایل: $e");
+      print("خطا در ذخیره پروفایل: $e");
       return false;
     }
   }

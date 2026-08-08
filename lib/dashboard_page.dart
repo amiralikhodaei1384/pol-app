@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:pol_app/api_service.dart';
 import 'package:pol_app/create_project_modal.dart';
-import 'package:pol_app/student_profile_builder_page.dart';
+import 'package:pol_app/project_details_page.dart';
 import 'package:pol_app/student_profile_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'login_page.dart';
-import 'package:pol_app/project_details_page.dart';
+
 class DashboardPage extends StatefulWidget {
   final bool isCompany;
 
@@ -53,9 +53,10 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token') ?? '';
 
-    // ارسال توکن جهت دریافت لیست پروژه‌ها
+    // ۱. بارگذاری پروژه‌ها
     final projects = await ApiService.fetchAllProjects(token);
 
+    // ۲. بارگذاری اطلاعات کاربر لاگین‌شده از بک‌اند
     if (token.isNotEmpty) {
       final userData = await ApiService.getMe(token);
       if (userData != null) {
@@ -79,7 +80,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const StudentProfilePage()),
-    ).then((_) => _loadDashboardData()); // رفرش خودکار اطلاعات داشبورد پس از ویرایش
+    ).then((_) => _loadDashboardData());
   }
 
   Future<void> _logout() async {
@@ -111,6 +112,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // ۱. نوار سمت راست (سایدبار)
               if (!isMobile)
                 SizedBox(
                   width: 250,
@@ -121,15 +123,15 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                   children: [
                     _buildTopBar(context, isMobile: isMobile),
                     Expanded(
-                      child: RefreshIndicator(
-                        onRefresh: _loadDashboardData,
-                        child: SingleChildScrollView(
-                          padding: EdgeInsets.all(isMobile ? 16 : 24),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                flex: 3,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // ۲. محتوای وسط (فقط این بخش اسکرول می‌شود)
+                          Expanded(
+                            child: RefreshIndicator(
+                              onRefresh: _loadDashboardData,
+                              child: SingleChildScrollView(
+                                padding: EdgeInsets.all(isMobile ? 16 : 24),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -148,16 +150,22 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                                   ],
                                 ),
                               ),
-                              if (isDesktop) ...[
-                                const SizedBox(width: 24),
-                                SizedBox(
-                                  width: 290,
+                            ),
+                          ),
+
+                          // ۳. باکس‌های سمت چپ (ثابت و چسبان در حالت دسکتاپ)
+                          if (isDesktop) ...[
+                            Padding(
+                              padding: const EdgeInsets.only(left: 24, top: 24, bottom: 24),
+                              child: SizedBox(
+                                width: 280,
+                                child: SingleChildScrollView(
                                   child: _buildLeftColumnContent(context),
                                 ),
-                              ],
-                            ],
-                          ),
-                        ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                   ],
@@ -202,8 +210,6 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
             ),
           ),
           const SizedBox(width: 16),
-
-          // پروفایل با منوی کشویی و بازکردن صفحه ویرایش
           PopupMenuButton<String>(
             offset: const Offset(0, 45),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -311,22 +317,31 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
       );
     }
 
+    // 📱 در حالت موبایل (منوی ۳ خطی): کارت‌ها عمودی و تک تک زیر هم قرار می‌گیرند
     if (isMobile) {
-      return SizedBox(
-        height: 265, // ارتفاع کارت‌ها برای جاگیری دکمه‌ها تنظیم شد
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: _projectsList.length,
-          separatorBuilder: (context, index) => const SizedBox(width: 16),
-          itemBuilder: (context, index) => _buildProjectCard(_projectsList[index], width: 280),
-        ),
+      return ListView.separated(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: _projectsList.length,
+        separatorBuilder: (context, index) => const SizedBox(height: 16),
+        itemBuilder: (context, index) => _buildProjectCard(_projectsList[index], width: double.infinity),
       );
     }
 
-    return Wrap(
-      spacing: 16,
-      runSpacing: 16,
-      children: _projectsList.map((item) => SizedBox(width: 320, child: _buildProjectCard(item))).toList(),
+    // 💻 در حالت دسکتاپ: گرید پاسخ‌گو
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _projectsList.length,
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 340,
+        mainAxisExtent: 250,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+      ),
+      itemBuilder: (context, index) {
+        return _buildProjectCard(_projectsList[index]);
+      },
     );
   }
 
@@ -337,7 +352,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     final matchScore = item['match_score'] ?? 80;
 
     return Container(
-      width: width,
+      width: width, // در موبایل ۱۰۰٪ عرض را پر می‌کند
       height: 250,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -361,9 +376,16 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(color: const Color(0xFFECFDF5), borderRadius: BorderRadius.circular(6)),
-                child: Text('$matchScore٪ تطابق هوشمند', style: const TextStyle(color: Color(0xFF047857), fontSize: 10, fontWeight: FontWeight.bold)),
+                child: Text('$matchScore٪ تطابق', style: const TextStyle(color: Color(0xFF047857), fontSize: 10, fontWeight: FontWeight.bold)),
               ),
-              Text(companyName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF1E6AFB))),
+              Expanded(
+                child: Text(
+                  companyName,
+                  textAlign: TextAlign.left,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF1E6AFB)),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -395,11 +417,9 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
             }).toList(),
           ),
           const SizedBox(height: 12),
-
-          // تک‌دکمه کامل «مشاهده جزئیات پروژه» برای دانشجو
           SizedBox(
             width: double.infinity,
-            height: 36,
+            height: 34,
             child: ElevatedButton(
               onPressed: () {
                 Navigator.push(
@@ -415,7 +435,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                 elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
-              child: const Text('مشاهده جزئیات پروژه', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+              child: const Text('مشاهده جزئیات پروژه', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
             ),
           ),
         ],
@@ -457,8 +477,6 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
               const SizedBox(height: 14),
               const Text('پروفایل شما کامل است و بیشترین شانس تطبیق را دارید.', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Colors.grey, height: 1.4)),
               const SizedBox(height: 14),
-
-              // دکمه ویرایش پروفایل
               OutlinedButton(
                 onPressed: _openProfileBuilder,
                 style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFF1E6AFB)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), minimumSize: const Size(double.infinity, 36)),
@@ -486,11 +504,11 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                 ],
               ),
               const SizedBox(height: 16),
-              Row(children: [const Icon(Icons.person_outline, size: 18, color: Colors.grey), const SizedBox(width: 8), Text(_studentName, style: const TextStyle(fontSize: 12, color: Colors.black87))]),
+              Row(children: [const Icon(Icons.person_outline, size: 18, color: Colors.grey), const SizedBox(width: 8), Text(_studentName, style: const TextStyle(fontSize: 11, color: Colors.black87))]),
               const SizedBox(height: 8),
-              Row(children: [const Icon(Icons.school_outlined, size: 18, color: Colors.grey), const SizedBox(width: 8), Text(_university, style: const TextStyle(fontSize: 12, color: Colors.black87))]),
+              Row(children: [const Icon(Icons.school_outlined, size: 18, color: Colors.grey), const SizedBox(width: 8), Text(_university, style: const TextStyle(fontSize: 11, color: Colors.black87))]),
               const SizedBox(height: 8),
-              Row(children: [const Icon(Icons.mail_outline, size: 18, color: Colors.grey), const SizedBox(width: 8), Text(_email, style: const TextStyle(fontSize: 12, color: Colors.black87))]),
+              Row(children: [const Icon(Icons.mail_outline, size: 18, color: Colors.grey), const SizedBox(width: 8), Expanded(child: Text(_email, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: Colors.black87)))]),
             ],
           ),
         ),
@@ -512,7 +530,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
               children: [
                 _buildNavItem(Icons.dashboard, 'داشبورد', isActive: true),
                 _buildNavItem(Icons.star_outline, 'پروژه‌های پیشنهادی'),
-                _buildNavItem(Icons.person_outline, 'پروفایل من', onTap: _openProfileBuilder), // <--- متصل شد
+                _buildNavItem(Icons.person_outline, 'پروفایل من', onTap: _openProfileBuilder),
                 _buildNavItem(Icons.settings_outlined, 'تنظیمات'),
                 _buildNavItem(
                   Icons.exit_to_app,
@@ -754,10 +772,31 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
       );
     }
 
-    return Wrap(
-      spacing: 16,
-      runSpacing: 16,
-      children: _myProjects.map((item) => SizedBox(width: 300, child: _buildCompanyProjectCard(item))).toList(),
+    // 📱 حالت موبایل: تک تک زیر هم
+    if (isMobile) {
+      return ListView.separated(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: _myProjects.length,
+        separatorBuilder: (context, index) => const SizedBox(height: 16),
+        itemBuilder: (context, index) => _buildCompanyProjectCard(_myProjects[index], width: double.infinity),
+      );
+    }
+
+    // 💻 حالت دسکتاپ: گرید
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _myProjects.length,
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 340,
+        mainAxisExtent: 240,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+      ),
+      itemBuilder: (context, index) {
+        return _buildCompanyProjectCard(_myProjects[index]);
+      },
     );
   }
 
@@ -766,7 +805,7 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
     final skills = (item['required_skills'] as List<dynamic>?)?.cast<String>() ?? [];
 
     return Container(
-      width: width,
+      width: width, // در موبایل ۱۰۰٪ عرض را پر می‌کند
       height: 240,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -823,8 +862,6 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
               }).toList(),
             ),
           const SizedBox(height: 12),
-
-          // دکمه «مشاهده جزئیات پروژه» برای کارفرما
           SizedBox(
             width: double.infinity,
             height: 34,

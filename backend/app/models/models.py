@@ -76,13 +76,20 @@ class StudentProfile(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), unique=True)
     full_name = Column(String, nullable=False)
+    phone = Column(String, nullable=True)          # <--- شماره همراه
+    birth_date = Column(String, nullable=True)     # <--- تاریخ تولد
+    residence = Column(String, nullable=True)      # <--- محل سکونت
+    birth_place = Column(String, nullable=True)    # <--- محل تولد
     bio = Column(Text, nullable=True)
     university = Column(String, nullable=True)
-    major = Column(String, nullable=True)           # رشته تحصیلی
-    entrance_year = Column(Integer, nullable=True)     # سال ورود
-    skills = Column(JSON, nullable=True)              # ['Flutter', 'Python']
-    courses = Column(JSON, nullable=True)             # [{'course': 'ساختمان داده', 'grade': 18.5}]
-    portfolio_links = Column(JSON, nullable=True)      # {'github': '...', 'figma': '...'}
+    major = Column(String, nullable=True)
+    entrance_year = Column(Integer, nullable=True)
+    skills = Column(JSON, nullable=True)
+    courses = Column(JSON, nullable=True)
+    educations = Column(JSON, nullable=True)
+    work_experiences = Column(JSON, nullable=True)
+    resume_file = Column(String, nullable=True)
+    portfolio_links = Column(JSON, nullable=True)
     completion_percentage = Column(Integer, default=0)
 
     user = relationship("User", back_populates="student_profile")

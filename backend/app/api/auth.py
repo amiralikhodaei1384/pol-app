@@ -123,7 +123,6 @@ def login(login_data: schemas.UserLogin, db: Session = Depends(get_db)):
 
 @router.get("/me")
 def get_me(current_user: models.User = Depends(get_current_user)):
-    """دریافت اطلاعات کامل کاربر جاری به همراه نقش و پروفایل"""
     role_str = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
 
     response = {
@@ -133,18 +132,21 @@ def get_me(current_user: models.User = Depends(get_current_user)):
     }
 
     if current_user.role == models.UserRole.STUDENT and current_user.student_profile:
+        p = current_user.student_profile
         response["profile"] = {
-            "full_name": current_user.student_profile.full_name,
-            "university": current_user.student_profile.university,
-            "major": current_user.student_profile.major,
-            "skills": current_user.student_profile.skills,
-            "courses": current_user.student_profile.courses,
-        }
-    elif current_user.role == models.UserRole.COMPANY_REP and current_user.company_rep_profile:
-        company = current_user.company_rep_profile.company
-        response["company"] = {
-            "name": company.name if company else None,
-            "address": company.address if company else None,
+            "full_name": p.full_name,
+            "phone": p.phone,
+            "birth_date": p.birth_date,
+            "residence": p.residence,
+            "birth_place": p.birth_place,
+            "university": p.university,
+            "major": p.major,
+            "skills": p.skills,
+            "courses": p.courses,
+            "educations": p.educations,
+            "work_experiences": p.work_experiences,
+            "resume_file": p.resume_file,
+            "portfolio_links": p.portfolio_links,
         }
 
     return response
@@ -156,9 +158,8 @@ def update_student_profile(
         db: Session = Depends(get_db),
         current_user: models.User = Depends(get_current_user)
 ):
-    """ذخیره و به‌روزرسانی فرم ۳ مرحله‌ای پروفایل دانشجو (دروس، نمرات، مهارت‌ها)"""
     if current_user.role != models.UserRole.STUDENT:
-        raise HTTPException(status_code=403, detail="تنها دانشجویان مجاز به ثبت و ویرایش این پروفایل هستند.")
+        raise HTTPException(status_code=403, detail="تنها دانشجویان مجاز به ویرایش هستند.")
 
     profile = db.query(models.StudentProfile).filter(models.StudentProfile.user_id == current_user.id).first()
 
@@ -167,11 +168,18 @@ def update_student_profile(
         db.add(profile)
 
     profile.full_name = profile_in.full_name
+    profile.phone = profile_in.phone
+    profile.birth_date = profile_in.birth_date
+    profile.residence = profile_in.residence
+    profile.birth_place = profile_in.birth_place
     profile.university = profile_in.university
     profile.major = profile_in.major
     profile.entrance_year = profile_in.entrance_year
     profile.skills = profile_in.skills
     profile.courses = [c.model_dump() for c in profile_in.courses]
+    profile.educations = profile_in.educations
+    profile.work_experiences = profile_in.work_experiences
+    profile.resume_file = profile_in.resume_file
     profile.portfolio_links = {
         "github": profile_in.github_link,
         "figma": profile_in.figma_link
@@ -180,4 +188,4 @@ def update_student_profile(
 
     db.commit()
     db.refresh(profile)
-    return {"message": "پروفایل دانشجو با موفقیت به‌روزرسانی شد.", "profile_id": str(profile.id)}
+    return {"message": "پروفایل دانشجو با موفقیت ذخیره شد."}

@@ -83,13 +83,20 @@ class CourseGrade(BaseModel):
 
 class StudentProfileCreate(BaseModel):
     full_name: str
-    university: str
-    major: str
-    entrance_year: int
-    skills: List[str]
-    courses: List[CourseGrade]
+    phone: Optional[str] = None
+    birth_date: Optional[str] = None
+    residence: Optional[str] = None
+    birth_place: Optional[str] = None
+    university: Optional[str] = None
+    major: Optional[str] = None
+    entrance_year: Optional[int] = None
+    skills: List[str] = []
+    courses: List[CourseGrade] = []
+    educations: Optional[List[dict]] = None
+    work_experiences: Optional[List[dict]] = None
     github_link: Optional[str] = None
     figma_link: Optional[str] = None
+    resume_file: Optional[str] = None
 
 class StudentProfileOut(StudentProfileCreate):
     id: UUID
