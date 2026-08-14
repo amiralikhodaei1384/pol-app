@@ -1,26 +1,23 @@
+import os
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware # ۱. این خط اضافه شد
-from app.api import auth , projects
-from app.db.base import Base
-from app.db.session import engine
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from app.api import auth, projects
 
-# ساخت جداول در دیتابیس
-Base.metadata.create_all(bind=engine)
+app = FastAPI(title="Karmatch API")
 
-app = FastAPI(title="Pol Platform API")
-
-# ۲. این بخش برای اجازه دادن به مرورگر کروم (CORS) اضافه شد
+# تنظیم CORS برای ارتباط با فلاتر
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # به تمام مرورگرها اجازه دسترسی می‌دهد
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# اضافه کردن مسیرهای احراز هویت
-app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
-app.include_router(projects.router , prefix = "/projects" , tags=["projects"])
-@app.get("/")
-def read_root():
-    return {"message": "Welcome to Pol Platform API"}
+# ساخت پوشه ذخیره رزومه‌ها در صورت عدم وجود
+os.makedirs("uploads/resumes", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+app.include_router(auth.router, prefix="/auth", tags=["Auth"])
+app.include_router(projects.router, prefix="/projects", tags=["Projects"])

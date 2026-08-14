@@ -184,4 +184,39 @@ class ApiService {
       return false;
     }
   }
+  // آپلود بایت‌های فایل رزومه به سرور
+  static Future<String?> uploadResume({
+    required String token,
+    required List<int> fileBytes,
+    required String fileName,
+  }) async {
+    try {
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse("$baseUrl/auth/upload-resume"),
+      );
+      request.headers['Authorization'] = 'Bearer $token';
+
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'file',
+          fileBytes,
+          filename: fileName,
+        ),
+      );
+
+      var streamedResponse = await request.send();
+      var response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['file_name']; // نام فایل ذخیره شده در سرور
+      } else {
+        print("خطای آپلود رزومه: ${response.body}");
+      }
+    } catch (e) {
+      print("خطا در ارسال بایت‌های فایل: $e");
+    }
+    return null;
+  }
 }

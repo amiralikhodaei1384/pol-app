@@ -1,5 +1,7 @@
+import os
+import re
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
@@ -10,11 +12,10 @@ from ..schemas import schemas
 from ..core import security
 
 router = APIRouter()
-
-# تعریف ساختار خواندن توکن از هدر Authorization
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
-# تابع احراز هویت کاربر جاری بر اساس توکن JWT ارسال شده
+UPLOAD_DIR = "uploads/resumes"
+
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> models.User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -43,15 +44,12 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 @router.post("/register", response_model=schemas.UserOut)
 def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
-    # ۱. بررسی تکراری نبودن ایمیل
     user = db.query(models.User).filter(models.User.email == user_in.email).first()
     if user:
         raise HTTPException(status_code=400, detail="این ایمیل قبلاً ثبت شده است.")
 
-    # ۲. هش کردن رمز عبور
     hashed_pw = security.get_password_hash(user_in.password)
 
-    # ۳. ساخت شیء کاربر
     db_user = models.User(
         email=user_in.email,
         password_hash=hashed_pw,
@@ -61,19 +59,15 @@ def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_user)
 
-    # ۴. ساخت پروفایل اولیه (دانشجو یا نماینده شرکت)
     if user_in.role == models.UserRole.STUDENT:
         profile = models.StudentProfile(
             user_id=db_user.id,
-            full_name=user_in.full_name or "دانشجوی جدید",
-            university="دانشگاه تهران",
-            major="مهندسی کامپیوتر",
-            completion_percentage=50
+            full_name="",  # <--- پاک شدن اسم دیفالت "دانشجوی جدید"
+            completion_percentage=0
         )
         db.add(profile)
 
     elif user_in.role == models.UserRole.COMPANY_REP:
-        # برای تست راحت‌تر، اگر شناسه ملی وارد نشده بود یک مقدار تصادفی تست تولید می‌شود
         national_id = user_in.national_id or f"1010{uuid.uuid4().hex[:6]}"
         company_name = user_in.company_name or "شرکت جدید"
 
@@ -108,7 +102,6 @@ def login(login_data: schemas.UserLogin, db: Session = Depends(get_db)):
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # تبدیل Enum نقش کاربر به رشته
     role_str = user.role.value if hasattr(user.role, 'value') else str(user.role)
 
     access_token = security.create_access_token(
@@ -152,6 +145,50 @@ def get_me(current_user: models.User = Depends(get_current_user)):
     return response
 
 
+# روتر جدید: دریافت فایل رزومه واقعی و ذخیره با اسم دانشجو روی سرور
+# روتر آپلود فایل رزومه (فقط PDF)
+@router.post("/upload-resume")
+async def upload_resume(
+        file: UploadFile = File(...),
+        db: Session = Depends(get_db),
+        current_user: models.User = Depends(get_current_user)
+):
+    if current_user.role != models.UserRole.STUDENT:
+        raise HTTPException(status_code=403, detail="تنها دانشجویان مجاز به آپلود رزومه هستند.")
+
+    # ۱. فیلتر امنیتی: تنها پسوند PDF مجاز است
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="لطفاً تنها فایل با فرمت PDF آپلود کنید."
+        )
+
+    profile = db.query(models.StudentProfile).filter(models.StudentProfile.user_id == current_user.id).first()
+
+    # ساخت نام فایل بر اساس نام واقعی دانشجو برای ذخیره در هارد سرور
+    raw_name = profile.full_name.strip() if (profile and profile.full_name and profile.full_name.strip()) else current_user.email.split('@')[0]
+    safe_name = re.sub(r'[^\w\s-]', '', raw_name).strip().replace(' ', '_')
+    if not safe_name:
+        safe_name = "Student"
+
+    new_filename = f"Resume_{safe_name}_{current_user.id.hex[:6]}.pdf"
+    file_path = os.path.join(UPLOAD_DIR, new_filename)
+
+    with open(file_path, "wb") as f:
+        content = await file.read()
+        f.write(content)
+
+    relative_url = f"/uploads/resumes/{new_filename}"
+    if profile:
+        profile.resume_file = relative_url
+        db.commit()
+
+    return {
+        "message": "فایل رزومه با موفقیت ذخیره شد.",
+        "file_url": relative_url
+    }
+
+
 @router.post("/student-profile")
 def update_student_profile(
         profile_in: schemas.StudentProfileCreate,
@@ -179,7 +216,8 @@ def update_student_profile(
     profile.courses = [c.model_dump() for c in profile_in.courses]
     profile.educations = profile_in.educations
     profile.work_experiences = profile_in.work_experiences
-    profile.resume_file = profile_in.resume_file
+    if profile_in.resume_file:
+        profile.resume_file = profile_in.resume_file
     profile.portfolio_links = {
         "github": profile_in.github_link,
         "figma": profile_in.figma_link
