@@ -108,8 +108,10 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
           _figmaController.text = p['portfolio_links']['figma'] ?? '';
         }
         if (p['resume_file'] != null && p['resume_file'].toString().isNotEmpty) {
-          _resumeServerPath = p['resume_file'];
-          _resumeUserFileName = "رزومه آپلود شده (PDF)";
+          final serverPath = p['resume_file'].toString();
+          _resumeServerPath = serverPath;
+          // استخراج نام فایل از آدرس سرور (مثلاً Resume_Ali_1a2b.pdf)
+          _resumeUserFileName = serverPath.split('/').last;
         }
       }
     }
@@ -160,10 +162,10 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
 
           if (savedPath != null) {
             setState(() {
-              _resumeUserFileName = file.name; // نمایش نام فایل انتخاب شده
-              _resumeServerPath = savedPath;
+              _resumeUserFileName = file.name; // نمایش نام اصلی پی‌دی‌اف انتخابی کاربر
+              _resumeServerPath = savedPath;   // آدرس سرور برای دیتابیس
             });
-            _showSnack('فایل رزومه PDF با موفقیت آپلود شد.', isError: false);
+            _showSnack('فایل رزومه PDF با موفقیت ذخیره شد.', isError: false);
           }
         }
       }
@@ -1044,7 +1046,7 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    _resumeUserFileName ?? 'برای انتخاب فایل رزومه (فقط PDF) کلیک کنید', // نمایش نام اصلی پی‌دی‌اف
+                    _resumeUserFileName ?? 'برای انتخاب یا تغییر فایل رزومه (فقط PDF) کلیک کنید',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 12,

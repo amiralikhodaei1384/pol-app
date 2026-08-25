@@ -5,7 +5,7 @@ import 'package:pol_app/project_details_page.dart';
 import 'package:pol_app/student_profile_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'login_page.dart';
-
+import 'package:pol_app/employer_applications_page.dart';
 class DashboardPage extends StatefulWidget {
   final bool isCompany;
 
@@ -33,6 +33,8 @@ class StudentDashboardView extends StatefulWidget {
 }
 
 class _StudentDashboardViewState extends State<StudentDashboardView> {
+  List<dynamic> _myApplicationsList = [];
+  bool _isLoadingApplications = true;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   List<dynamic> _projectsList = [];
   bool _isLoadingProjects = true;
@@ -49,14 +51,16 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
   }
 
   Future<void> _loadDashboardData() async {
-    setState(() => _isLoadingProjects = true);
+    setState(() {
+      _isLoadingProjects = true;
+      _isLoadingApplications = true;
+    });
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token') ?? '';
 
-    // ۱. بارگذاری پروژه‌ها
     final projects = await ApiService.fetchAllProjects(token);
+    final applications = await ApiService.fetchMyApplications(token);
 
-    // ۲. بارگذاری اطلاعات کاربر لاگین‌شده از بک‌اند
     if (token.isNotEmpty) {
       final userData = await ApiService.getMe(token);
       if (userData != null) {
@@ -71,7 +75,9 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     if (mounted) {
       setState(() {
         _projectsList = projects;
+        _myApplicationsList = applications;
         _isLoadingProjects = false;
+        _isLoadingApplications = false;
       });
     }
   }
@@ -444,7 +450,79 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
   }
 
   Widget _buildRecentRequestsSection({required bool isMobile}) {
-    return Container();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('درخواست‌های ارسال‌شده من (وضعیت اپلای)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+            TextButton(
+              onPressed: _loadDashboardData,
+              child: const Row(children: [Text('بروزرسانی', style: TextStyle(fontSize: 12, color: Color(0xFF1E6AFB))), Icon(Icons.refresh, size: 16, color: Color(0xFF1E6AFB))]),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        _isLoadingApplications
+            ? const Center(child: CircularProgressIndicator())
+            : _myApplicationsList.isEmpty
+            ? Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
+          child: const Text('شما هنوز برای هیچ پروژه‌ای درخواست فرستاده‌اید.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey, fontSize: 12)),
+        )
+            : ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _myApplicationsList.length,
+          separatorBuilder: (context, index) => const SizedBox(height: 8),
+          itemBuilder: (context, index) {
+            final app = _myApplicationsList[index];
+            final statusFa = app['status_fa'] ?? 'در انتظار بررسی';
+            final statusRaw = app['status'] ?? 'applied';
+
+            Color statusColor = Colors.orange;
+            Color statusBg = const Color(0xFFFFF3E0);
+            if (statusRaw == 'shortlisted') {
+              statusColor = Colors.blue;
+              statusBg = const Color(0xFFE3F2FD);
+            } else if (statusRaw == 'accepted') {
+              statusColor = Colors.green;
+              statusBg = const Color(0xFFE8F5E9);
+            } else if (statusRaw == 'rejected') {
+              statusColor = Colors.red;
+              statusBg = const Color(0xFFFFEBEE);
+            }
+
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(app['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        const SizedBox(height: 4),
+                        Text('${app['company_name']} • ${app['city']} • ${app['project_type']}', style: const TextStyle(color: Colors.grey, fontSize: 11)),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(color: statusBg, borderRadius: BorderRadius.circular(6)),
+                    child: Text(statusFa, style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
+    );
   }
 
   Widget _buildLeftColumnContent(BuildContext context) {
@@ -587,7 +665,12 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   List<dynamic> _myProjects = [];
   bool _isLoadingMyProjects = true;
-
+  void _openEmployerApplications() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const EmployerApplicationsPage()),
+    );
+  }
   @override
   void initState() {
     super.initState();
@@ -698,19 +781,68 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
             const SizedBox(width: 8),
           ],
           const Spacer(),
+
+          // ۱. دکمه جدید مدیریت متقاضیان
+          ElevatedButton.icon(
+            onPressed: _openEmployerApplications,
+            icon: const Icon(Icons.people_outline, size: 16),
+            label: const Text('مدیریت متقاضیان', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: const Color(0xFF1E6AFB),
+              elevation: 0,
+              side: const BorderSide(color: Color(0xFFE5E7EB)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            ),
+          ),
+          const SizedBox(width: 10),
+
+          // ۲. دکمه ثبت پروژه جدید
           ElevatedButton.icon(
             onPressed: () => _openCreateProjectModal(context),
             icon: const Icon(Icons.add, size: 18),
             label: const Text('پروژه جدید', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E6AFB), foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1E6AFB),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            ),
           ),
           const SizedBox(width: 16),
+
+          // ۳. منوی آواتار و خروج
           PopupMenuButton<String>(
+            offset: const Offset(0, 45),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             onSelected: (value) {
+              if (value == 'applications') _openEmployerApplications();
               if (value == 'logout') _logout();
             },
             itemBuilder: (context) => [
-              const PopupMenuItem(value: 'logout', child: Text('خروج از حساب', style: TextStyle(color: Colors.red))),
+              const PopupMenuItem(
+                value: 'applications',
+                child: Row(
+                  children: [
+                    Icon(Icons.people_outline, size: 18, color: Colors.black87),
+                    SizedBox(width: 8),
+                    Text('مدیریت متقاضیان', style: TextStyle(fontSize: 12)),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.exit_to_app, size: 18, color: Colors.red),
+                    SizedBox(width: 8),
+                    Text('خروج از حساب', style: TextStyle(fontSize: 12, color: Colors.red, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
             ],
             child: CircleAvatar(
               radius: 18,
@@ -900,6 +1032,12 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
                 _buildNavItem(Icons.dashboard, 'داشبورد کارفرما', isActive: true),
                 _buildNavItem(Icons.add_box_outlined, 'ثبت پروژه جدید', onTap: () => _openCreateProjectModal(context)),
                 _buildNavItem(Icons.exit_to_app, 'خروج از حساب', onTap: _logout),
+                // داخل متد _buildSidebarContent:
+                _buildNavItem(
+                  Icons.people_outline,
+                  'مدیریت درخواست‌ها (رزومه‌ها)',
+                  onTap: _openEmployerApplications, // <--- اتصال دکمه
+                ),
               ],
             ),
           ),

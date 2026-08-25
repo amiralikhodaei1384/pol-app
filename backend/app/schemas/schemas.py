@@ -6,7 +6,7 @@ from enum import Enum
 from ..models.models import UserRole
 
 # ----------------------------------------------------
-# 1. Schemas قبلی شما (User)
+# 1. Schemas کاربر (User Schemas)
 # ----------------------------------------------------
 class UserBase(BaseModel):
     email: EmailStr
@@ -39,7 +39,16 @@ class UserOut(UserBase):
         from_attributes = True
 
 # ----------------------------------------------------
-# 2. Schemas جدید: تعریف پروژه (بخش ۵.۲ سند UX)
+# 2. Schemas شرکت (Company Schemas)
+# ----------------------------------------------------
+class CompanyOut(BaseModel):
+    id: UUID
+    name: str
+    class Config:
+        from_attributes = True
+
+# ----------------------------------------------------
+# 3. Schemas پروژه (Project Schemas)
 # ----------------------------------------------------
 class ProjectType(str, Enum):
     INTERNSHIP = "کارآموزی"
@@ -53,30 +62,32 @@ class MatchingWeights(BaseModel):
     courses_weight: float = Field(default=0.20, ge=0.0, le=1.0)
 
 class ProjectCreate(BaseModel):
-    title: str = Field(..., min_length=3, max_length=150, description="عنوان پروژه")
-    description: str = Field(..., description="شرح وظایف و خروجی مورد انتظار")
-    required_skills: List[str] = Field(..., description="مهارت‌های مورد نیاز")
-    deadline: datetime = Field(..., description="مهلت پیشنهادی")
-    project_type: ProjectType = Field(default=ProjectType.PROJECT, description="نوع همکاری")
-    requires_interview: bool = Field(default=True, description="گزینه نیاز به مصاحبه/ملاقات حضوری")
-    weights: Optional[MatchingWeights] = Field(default_factory=MatchingWeights, description="وزن‌دهی تطبیق (اختیاری)")
-
-class CompanyOut(BaseModel):
-    id: UUID
-    name: str
-    class Config:
-        from_attributes = True
+    title: str = Field(..., min_length=3, max_length=150)
+    description: str
+    required_skills: List[str]
+    deadline: datetime
+    project_type: ProjectType = Field(default=ProjectType.PROJECT)
+    city: Optional[str] = "نامشخص"           # <--- تغییر به Optional برای جلوگیری از ارور پروژه‌های قدیمی
+    category: Optional[str] = "عمومی"         # <--- تغییر به Optional
+    related_major: Optional[str] = "سایر"     # <--- تغییر به Optional
+    target_universities: Optional[List[str]] = []
+    target_majors: Optional[List[str]] = []
+    requires_interview: bool = Field(default=True)
+    weights: Optional[MatchingWeights] = Field(default_factory=MatchingWeights)
 
 class ProjectOut(ProjectCreate):
     id: UUID
     company_id: UUID
     created_at: datetime
     is_active: bool = True
-    company: Optional[CompanyOut] = None  # اضافه شدن اطلاعات شرکت
+    company: Optional[CompanyOut] = None
 
     class Config:
         from_attributes = True
 
+# ----------------------------------------------------
+# 4. Schemas دانشجو (Student Schemas)
+# ----------------------------------------------------
 class CourseGrade(BaseModel):
     course_name: str
     grade: float = Field(..., ge=0, le=20)
@@ -105,3 +116,15 @@ class StudentProfileOut(StudentProfileCreate):
 
     class Config:
         from_attributes = True
+
+# ----------------------------------------------------
+# 5. Schemas چت و مصاحبه (Chat & Interview Schemas)
+# ----------------------------------------------------
+class ScheduleInterviewSchema(BaseModel):
+    interview_date: str
+    interview_address: str
+    interview_note: Optional[str] = ""
+
+class SendMessageSchema(BaseModel):
+    thread_id: UUID
+    text: str

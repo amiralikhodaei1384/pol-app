@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
-import math
+from typing import List, Optional
 
 from ..db.session import get_db
 from ..models import models
@@ -10,165 +9,254 @@ from .auth import get_current_user
 
 router = APIRouter()
 
-# تابع محاسبه درصد تطابق هوشمند (بخش ۳ داک)
+UNIVERSITIES = [
+    "دانشگاه تهران", "دانشگاه صنعتی شریف", "دانشگاه صنعتی امیرکبیر",
+    "دانشگاه علم و صنعت", "دانشگاه شهید بهشتی", "دانشگاه خواجه نصیر",
+    "دانشگاه علامه طباطبایی", "دانشگاه اصفهان", "دانشگاه شیراز", "سایر"
+]
+MAJORS = [
+    "مهندسی کامپیوتر", "مهندسی برق", "مهندسی صنایع", "مهندسی مکانیک",
+    "علوم کامپیوتر", "مدیریت / MBA", "مهندسی عمران", "سایر"
+]
+CITIES = ["تهران", "اصفهان", "شیراز", "مشهد", "تبریز", "کرج", "اهواز", "قم", "رشت", "دورکاری"]
+CATEGORIES = ["توسعه نرم‌افزار", "طراحی UI/UX", "دیجیتال مارکتینگ", "هوش مصنوعی و داده", "شبکه و امنیت", "مدیریت و صنایع"]
+
 def calculate_match_score(student_profile: models.StudentProfile, project: models.Project) -> int:
-    if not student_profile:
-        return 60  # درصد پایه
+    if not student_profile: return 60
+    target_univs = project.target_universities or []
+    univ_score = 100 if (student_profile.university in target_univs) else (75 if not target_univs else 50)
+    target_majors = project.target_majors or []
+    major_score = 100 if (student_profile.major in target_majors) else (75 if not target_majors else 50)
 
-    # ۱. محاسبه تطابق مهارت‌ها
     student_skills = set(student_profile.skills or [])
-    required_skills = set(project.required_skills or [])
-    skills_score = 0
-    if required_skills:
-        matched = student_skills.intersection(required_skills)
-        skills_score = (len(matched) / len(required_skills)) * 100
+    project_skills = set(project.required_skills or [])
+    skills_score = (len(student_skills.intersection(project_skills)) / len(project_skills) * 100) if project_skills else 70
 
-    # ۲. محاسبه تطابق نمرات و دروس گذرانده‌شده
     courses = student_profile.courses or []
-    courses_score = 70
-    if courses:
-        avg_grade = sum(c.get('grade', 15) for c in courses) / len(courses)
-        courses_score = min(100, (avg_grade / 20.0) * 100)
+    courses_score = (sum(c.get('grade', 15) for c in courses) / len(courses) / 20.0 * 100) if courses else 70
 
-    # ۳. اعمال وزن‌های تعیین‌شده توسط کارفرما
-    weights = project.weights or {
-        "university_weight": 0.25,
-        "major_weight": 0.25,
-        "skills_weight": 0.30,
-        "courses_weight": 0.20
-    }
-
-    univ_score = 90 if student_profile.university else 60
-    major_score = 85 if student_profile.major else 60
-
+    weights = project.weights or {"university_weight": 0.25, "major_weight": 0.25, "skills_weight": 0.30, "courses_weight": 0.20}
     final_score = (
             univ_score * weights.get("university_weight", 0.25) +
             major_score * weights.get("major_weight", 0.25) +
             skills_score * weights.get("skills_weight", 0.30) +
             courses_score * weights.get("courses_weight", 0.20)
     )
+    return max(40, min(98, round(final_score)))
 
-    return max(45, min(98, round(final_score)))
+# ۱. دریافت گزینه‌های فرم‌ها
+@router.get("/options")
+def get_options():
+    return {"universities": UNIVERSITIES, "majors": MAJORS, "cities": CITIES, "categories": CATEGORIES}
 
+# ۲. پروژه‌های پیشنهادی دانشجو
+@router.get("/recommended")
+def get_recommended_projects(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    if current_user.role != models.UserRole.STUDENT or not current_user.student_profile: return []
+    p_profile = current_user.student_profile
+    all_p = db.query(models.Project).filter(models.Project.is_active == True).all()
 
-# ثبت پروژه جدید توسط کارفرما
-@router.post("/", response_model=schemas.ProjectOut, status_code=status.HTTP_201_CREATED)
-def create_project(
-        project_in: schemas.ProjectCreate,
-        db: Session = Depends(get_db),
-        current_user: models.User = Depends(get_current_user)
-):
-    if current_user.role != models.UserRole.COMPANY_REP:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="تنها نمایندگان شرکت‌ها مجاز به ثبت پروژه هستند.")
+    recommended = []
+    for p in all_p:
+        score = calculate_match_score(p_profile, p)
+        if score >= 60:
+            is_applied = db.query(models.Application).filter(models.Application.student_id == current_user.id, models.Application.project_id == p.id).first() is not None
+            recommended.append({
+                "id": str(p.id), "title": p.title, "description": p.description, "required_skills": p.required_skills,
+                "deadline": p.deadline.isoformat() if p.deadline else None, "project_type": p.project_type, "city": getattr(p, 'city', 'تهران'),
+                "company_name": p.company.name if p.company else "شرکت فناوری", "match_score": score, "is_applied": is_applied
+            })
+    recommended.sort(key=lambda x: x["match_score"], reverse=True)
+    return recommended
 
-    if not current_user.company_rep_profile or not current_user.company_rep_profile.company_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="اطلاعات شرکت یافت نشد.")
-
+# ۳. پروژه‌های ثبت‌شده توسط کارفرما
+@router.get("/my-projects", response_model=List[schemas.ProjectOut])
+def get_my_projects(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    if current_user.role != models.UserRole.COMPANY_REP or not current_user.company_rep_profile:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="دسترسی غیرمجاز")
     company_id = current_user.company_rep_profile.company_id
+    projects = db.query(models.Project).filter(models.Project.company_id == company_id).order_by(models.Project.created_at.desc()).all()
+    for p in projects:
+        if not getattr(p, 'city', None): p.city = "تهران"
+        if not getattr(p, 'category', None): p.category = "توسعه نرم‌افزار"
+    return projects
 
+# ۴. لیست درخواست‌های اپلای‌شده دانشجو
+@router.get("/my-applications")
+def get_my_applications(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    if current_user.role != models.UserRole.STUDENT:
+        raise HTTPException(status_code=403, detail="تنها دانشجویان به این بخش دسترسی دارند.")
+    applications = db.query(models.Application).filter(models.Application.student_id == current_user.id).order_by(models.Application.created_at.desc()).all()
+    result = []
+    for app in applications:
+        project = app.project
+        if project:
+            status_val = app.status.value if hasattr(app.status, 'value') else str(app.status)
+            status_fa = "در انتظار بررسی"
+            if status_val == "shortlisted": status_fa = "دعوت به مصاحبه"
+            elif status_val == "accepted": status_fa = "پذیرفته شده"
+            elif status_val == "rejected": status_fa = "رد شده"
+
+            result.append({
+                "id": str(app.id),
+                "status": status_val,
+                "status_fa": status_fa,
+                "created_at": app.created_at.strftime("%Y/%m/%d") if app.created_at else "",
+                "project_id": str(project.id),
+                "title": project.title,
+                "company_name": project.company.name if project.company else "شرکت فناوری",
+                "city": getattr(project, 'city', 'تهران') or "تهران",
+                "project_type": project.project_type,
+            })
+    return result
+
+# ۵. بورد مدیریت رزومه‌ها و متقاضیان برای کارفرما
+@router.get("/company-applications")
+def get_company_applications(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    if current_user.role != models.UserRole.COMPANY_REP or not current_user.company_rep_profile:
+        raise HTTPException(status_code=403, detail="دسترسی غیرمجاز")
+    company_id = current_user.company_rep_profile.company_id
+    company_projects = db.query(models.Project).filter(models.Project.company_id == company_id).all()
+    project_ids = [p.id for p in company_projects]
+
+    apps = db.query(models.Application).filter(models.Application.project_id.in_(project_ids)).order_by(models.Application.created_at.desc()).all()
+    res = []
+    for a in apps:
+        student_user = db.query(models.User).filter(models.User.id == a.student_id).first()
+        sp = student_user.student_profile if student_user else None
+        chat = db.query(models.ChatThread).filter(models.ChatThread.application_id == a.id).first()
+
+        res.append({
+            "application_id": str(a.id),
+            "project_title": a.project.title if a.project else "",
+            "student_name": sp.full_name if (sp and sp.full_name) else "دانشجوی جدید",
+            "student_university": sp.university if (sp and sp.university) else "نامشخص",
+            "student_major": sp.major if (sp and sp.major) else "نامشخص",
+            "student_skills": sp.skills if sp else [],
+            "student_resume": sp.resume_file if sp else None,
+            "match_score": calculate_match_score(sp, a.project) if (sp and a.project) else 75,
+            "status": a.status.value if hasattr(a.status, 'value') else str(a.status),
+            "interview_date": a.interview_date,
+            "interview_address": a.interview_address,
+            "has_chat": chat is not None,
+            "chat_thread_id": str(chat.id) if chat else None,
+        })
+    return res
+
+# ۶. لیست کل پروژه‌ها با فیلترها
+@router.get("/")
+def get_all_projects(
+        project_type: Optional[str] = None, city: Optional[str] = None, category: Optional[str] = None,
+        related_major: Optional[str] = None, university: Optional[str] = None, search: Optional[str] = None,
+        db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
+):
+    query = db.query(models.Project).filter(models.Project.is_active == True)
+    if project_type and project_type != "همه": query = query.filter(models.Project.project_type == project_type)
+    if city and city != "همه": query = query.filter(models.Project.city == city)
+    if category and category != "همه": query = query.filter(models.Project.category == category)
+    if search and search.strip():
+        sf = f"%{search.strip()}%"
+        query = query.filter((models.Project.title.ilike(sf)) | (models.Project.description.ilike(sf)))
+
+    projects = query.order_by(models.Project.created_at.desc()).all()
+    student_profile = db.query(models.StudentProfile).filter(models.StudentProfile.user_id == current_user.id).first() if current_user.role == models.UserRole.STUDENT else None
+
+    result = []
+    for p in projects:
+        if university and university != "همه":
+            if p.target_universities and university not in p.target_universities:
+                continue
+        match_score = calculate_match_score(student_profile, p) if student_profile else 75
+        p_dict = {
+            "id": str(p.id), "title": p.title, "description": p.description, "required_skills": p.required_skills,
+            "deadline": p.deadline.isoformat() if p.deadline else None, "project_type": p.project_type,
+            "city": getattr(p, 'city', 'تهران') or "تهران", "category": getattr(p, 'category', 'توسعه نرم‌افزار') or "توسعه نرم‌افزار",
+            "target_universities": p.target_universities or [], "target_majors": p.target_majors or [],
+            "requires_interview": p.requires_interview, "company_name": p.company.name if p.company else "شرکت فناوری",
+            "match_score": match_score, "is_applied": False
+        }
+        if current_user.role == models.UserRole.STUDENT:
+            app = db.query(models.Application).filter(models.Application.student_id == current_user.id, models.Application.project_id == p.id).first()
+            if app: p_dict["is_applied"] = True
+        result.append(p_dict)
+    return result
+
+# ۷. ثبت پروژه جدید کارفرما
+@router.post("/", response_model=schemas.ProjectOut, status_code=status.HTTP_201_CREATED)
+def create_project(project_in: schemas.ProjectCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    if current_user.role != models.UserRole.COMPANY_REP: raise HTTPException(status_code=403, detail="تنها کارفرما مجاز است.")
+    if not current_user.company_rep_profile or not current_user.company_rep_profile.company_id: raise HTTPException(status_code=400, detail="اطلاعات شرکت یافت نشد.")
+    company_id = current_user.company_rep_profile.company_id
     new_project = models.Project(
-        company_id=company_id,
-        title=project_in.title,
-        description=project_in.description,
-        required_skills=project_in.required_skills,
-        deadline=project_in.deadline,
-        project_type=project_in.project_type.value,
-        requires_interview=project_in.requires_interview,
+        company_id=company_id, title=project_in.title, description=project_in.description,
+        required_skills=project_in.required_skills, deadline=project_in.deadline, project_type=project_in.project_type.value if hasattr(project_in.project_type, 'value') else project_in.project_type,
+        city=project_in.city, category=project_in.category, target_universities=project_in.target_universities,
+        target_majors=project_in.target_majors, requires_interview=project_in.requires_interview,
         weights=project_in.weights.model_dump() if project_in.weights else None
     )
-
     db.add(new_project)
     db.commit()
     db.refresh(new_project)
     return new_project
 
-
-# دریافت همه پروژه‌ها به همراه درصد تطابق دانشجو
-@router.get("/")
-def get_all_projects(
-        db: Session = Depends(get_db),
-        current_user: models.User = Depends(get_current_user)
-):
-    projects = db.query(models.Project).filter(models.Project.is_active == True).order_by(models.Project.created_at.desc()).all()
-
-    student_profile = None
-    if current_user.role == models.UserRole.STUDENT:
-        student_profile = db.query(models.StudentProfile).filter(models.StudentProfile.user_id == current_user.id).first()
-
-    result = []
-    for p in projects:
-        match_score = calculate_match_score(student_profile, p) if student_profile else 75
-        p_dict = {
-            "id": str(p.id),
-            "title": p.title,
-            "description": p.description,
-            "required_skills": p.required_skills,
-            "deadline": p.deadline.isoformat() if p.deadline else None,
-            "project_type": p.project_type,
-            "requires_interview": p.requires_interview,
-            "company_name": p.company.name if p.company else "شرکت فناوری",
-            "match_score": match_score,
-            "is_applied": False
-        }
-
-        # بررسی اینکه آیا دانشجو قبلا درخواست داده است یا خیر
-        if current_user.role == models.UserRole.STUDENT:
-            app = db.query(models.Application).filter(
-                models.Application.student_id == current_user.id,
-                models.Application.project_id == p.id
-            ).first()
-            if app:
-                p_dict["is_applied"] = True
-                p_dict["application_status"] = app.status.value if hasattr(app.status, 'value') else str(app.status)
-
-        result.append(p_dict)
-
-    return result
-
-
-# دریافت پروژه‌های خود کارفرما
-@router.get("/my-projects", response_model=List[schemas.ProjectOut])
-def get_my_projects(
-        db: Session = Depends(get_db),
-        current_user: models.User = Depends(get_current_user)
-):
-    if current_user.role != models.UserRole.COMPANY_REP or not current_user.company_rep_profile:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="دسترسی غیرمجاز")
-
-    company_id = current_user.company_rep_profile.company_id
-    return db.query(models.Project).filter(models.Project.company_id == company_id).order_by(models.Project.created_at.desc()).all()
-
-
-# ثبت درخواست پروژه توسط دانشجو (بخش ۴.۲ داک)
-@router.post("/{project_id}/apply")
-def apply_for_project(
-        project_id: str,
-        db: Session = Depends(get_db),
-        current_user: models.User = Depends(get_current_user)
-):
-    if current_user.role != models.UserRole.STUDENT:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="تنها دانشجویان مجاز به ارسال درخواست هستند.")
-
-    project = db.query(models.Project).filter(models.Project.id == project_id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="پروژه یافت نشد.")
-
-    # بررسی تکراری نبودن درخواست
-    existing_app = db.query(models.Application).filter(
-        models.Application.student_id == current_user.id,
-        models.Application.project_id == project_id
-    ).first()
-
-    if existing_app:
-        raise HTTPException(status_code=400, detail="شما قبلاً برای این پروژه درخواست ارسال کرده‌اید.")
-
-    new_application = models.Application(
-        student_id=current_user.id,
-        project_id=project_id,
-        status=models.ApplicationStatus.APPLIED
-    )
-
-    db.add(new_application)
+# ۸. دعوت به مصاحبه حضوری
+@router.post("/applications/{app_id}/schedule-interview")
+def schedule_interview(app_id: str, body: schemas.ScheduleInterviewSchema, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    app_obj = db.query(models.Application).filter(models.Application.id == app_id).first()
+    if not app_obj: raise HTTPException(status_code=404, detail="درخواست یافت نشد.")
+    app_obj.status = models.ApplicationStatus.SHORTLISTED
+    app_obj.interview_date = body.interview_date
+    app_obj.interview_address = body.interview_address
+    app_obj.interview_note = body.interview_note
     db.commit()
+    return {"message": "دعوت به مصاحبه ثبت شد."}
 
-    return {"message": "درخواست شما با موفقیت ثبت شد و در انتظار بررسی کارفرما است."}
+# ۹. چت
+@router.post("/chat/start")
+def start_chat(app_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    if current_user.role != models.UserRole.COMPANY_REP: raise HTTPException(status_code=403, detail="تنها کارفرما مجاز به شروع چت است.")
+    app_obj = db.query(models.Application).filter(models.Application.id == app_id).first()
+    if not app_obj: raise HTTPException(status_code=404, detail="درخواست یافت نشد.")
+    existing_thread = db.query(models.ChatThread).filter(models.ChatThread.application_id == app_obj.id).first()
+    if existing_thread: return {"thread_id": str(existing_thread.id)}
+    new_thread = models.ChatThread(application_id=app_obj.id, employer_id=current_user.id, student_id=app_obj.student_id)
+    db.add(new_thread)
+    db.commit()
+    db.refresh(new_thread)
+    return {"thread_id": str(new_thread.id)}
+
+@router.get("/chat/threads")
+def get_chat_threads(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    threads = db.query(models.ChatThread).filter(models.ChatThread.student_id == current_user.id).all() if current_user.role == models.UserRole.STUDENT else db.query(models.ChatThread).filter(models.ChatThread.employer_id == current_user.id).all()
+    res = []
+    for t in threads:
+        app_obj = db.query(models.Application).filter(models.Application.id == t.application_id).first()
+        other_name = "کارفرما"
+        if current_user.role == models.UserRole.COMPANY_REP and app_obj and app_obj.student and app_obj.student.student_profile:
+            other_name = app_obj.student.student_profile.full_name or "دانشجو"
+        res.append({"thread_id": str(t.id), "title": app_obj.project.title if (app_obj and app_obj.project) else "گفتگو", "other_party": other_name})
+    return res
+
+@router.get("/chat/messages/{thread_id}")
+def get_messages(thread_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    msgs = db.query(models.ChatMessage).filter(models.ChatMessage.thread_id == thread_id).order_by(models.ChatMessage.created_at.asc()).all()
+    return [{"id": str(m.id), "sender_id": str(m.sender_id), "is_me": m.sender_id == current_user.id, "text": m.text, "created_at": m.created_at.strftime("%H:%M") if m.created_at else ""} for m in msgs]
+
+@router.post("/chat/send")
+def send_message(body: schemas.SendMessageSchema, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    msg = models.ChatMessage(thread_id=body.thread_id, sender_id=current_user.id, text=body.text)
+    db.add(msg)
+    db.commit()
+    return {"message": "پیام ارسال شد."}
+
+# ۱۰. ثبت درخواست پروژه توسط دانشجو (حتماً باید انتهای فایل باشد)
+@router.post("/{project_id}/apply")
+def apply_for_project(project_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    if current_user.role != models.UserRole.STUDENT: raise HTTPException(status_code=403, detail="تنها دانشجویان مجاز به ارسال درخواست هستند.")
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project: raise HTTPException(status_code=404, detail="پروژه یافت نشد.")
+    if db.query(models.Application).filter(models.Application.student_id == current_user.id, models.Application.project_id == project.id).first():
+        raise HTTPException(status_code=400, detail="شما قبلاً برای این پروژه درخواست ارسال کرده‌اید.")
+    db.add(models.Application(student_id=current_user.id, project_id=project.id, status=models.ApplicationStatus.APPLIED))
+    db.commit()
+    return {"message": "درخواست شما با موفقیت ثبت شد."}

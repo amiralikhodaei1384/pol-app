@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'api_service.dart';
+import 'package:pol_app/api_service.dart';
 
 class CreateProjectModal extends StatefulWidget {
   const CreateProjectModal({super.key});
@@ -19,18 +19,41 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _skillInputController = TextEditingController();
 
-  // Form State
-  String _selectedProjectType = 'پروژه'; // پروژه / کارآموزی / امریه
+  // Form State (بدون پیش‌فرض‌های هاردکد شده)
+  String? _selectedProjectType; // پروژه / کارآموزی / امریه
+  String? _selectedCity;
+  String? _selectedCategory;
+
+  List<String> _selectedUniversities = [];
+  List<String> _selectedMajors = [];
+
+  List<String> _cities = ['تهران', 'اصفهان', 'شیراز', 'مشهد', 'تبریز', 'کرج', 'اهواز', 'قم', 'رشت', 'دورکاری'];
+  List<String> _categories = ['توسعه نرم‌افزار', 'طراحی UI/UX', 'دیجیتال مارکتینگ', 'هوش مصنوعی و داده', 'شبکه و امنیت', 'مدیریت و صنایع'];
+  List<String> _allUniversities = ['دانشگاه تهران', 'دانشگاه صنعتی شریف', 'دانشگاه صنعتی امیرکبیر', 'دانشگاه علم و صنعت', 'دانشگاه شهید بهشتی', 'سایر'];
+  List<String> _allMajors = ['مهندسی کامپیوتر', 'مهندسی برق', 'مهندسی صنایع', 'مهندسی مکانیک', 'علوم کامپیوتر', 'سایر'];
+
   final List<String> _skillsList = [];
   DateTime? _selectedDeadline;
   bool _requiresInterview = true;
   bool _isLoading = false;
 
-  // Matching Weights (بخش ۵.۲ سند UX)
-  double _univWeight = 0.25;
-  double _majorWeight = 0.25;
-  double _skillsWeight = 0.30;
-  double _coursesWeight = 0.20;
+  @override
+  void initState() {
+    super.initState();
+    _loadOptions();
+  }
+
+  Future<void> _loadOptions() async {
+    final opts = await ApiService.fetchOptions();
+    if (opts != null && mounted) {
+      setState(() {
+        if (opts['cities'] != null) _cities = (opts['cities'] as List).cast<String>();
+        if (opts['categories'] != null) _categories = (opts['categories'] as List).cast<String>();
+        if (opts['universities'] != null) _allUniversities = (opts['universities'] as List).cast<String>();
+        if (opts['majors'] != null) _allMajors = (opts['majors'] as List).cast<String>();
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -71,19 +94,39 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
   }
 
   Future<void> _submitProject() async {
-    if (!_formKey.currentState!.validate()) return;
+    // ۱. اگر متنی در کادر مهارت مانده، خودکار اضافه کن
+    if (_skillInputController.text.trim().isNotEmpty) {
+      _addSkill();
+    }
+
+    // ۲. اعتبارسنجی ورودی‌های متنی
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    // ۳. بررسی تفکیک‌شده فیلدها با پیام‌های خطای مشخص
+    if (_selectedProjectType == null) {
+      _showSnack('لطفاً «نوع همکاری» را انتخاب کنید.');
+      return;
+    }
+
+    if (_selectedCity == null) {
+      _showSnack('لطفاً «شهر / مکان» را انتخاب کنید.');
+      return;
+    }
+
+    if (_selectedCategory == null) {
+      _showSnack('لطفاً «دسته‌بندی شغلی» را انتخاب کنید.');
+      return;
+    }
 
     if (_skillsList.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('لطفاً حداقل یک مهارت اضافه کنید.')),
-      );
+      _showSnack('لطفاً حداقل یک مهارت وارد کرده و دکمه افزودن را بزنید.');
       return;
     }
 
     if (_selectedDeadline == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('لطفاً مهلت پیشنهادی را مشخص کنید.')),
-      );
+      _showSnack('لطفاً «مهلت ارسال درخواست» (تاریخ) را تعیین کنید.');
       return;
     }
 
@@ -93,7 +136,6 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('access_token') ?? '';
 
-      // آدرس API بک‌اند خود را در اینجا وارد کنید
       final url = Uri.parse('${ApiService.baseUrl}/projects/');
 
       final response = await http.post(
@@ -108,44 +150,44 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
           'required_skills': _skillsList,
           'deadline': _selectedDeadline!.toIso8601String(),
           'project_type': _selectedProjectType,
+          'city': _selectedCity,
+          'category': _selectedCategory,
+          'target_universities': _selectedUniversities,
+          'target_majors': _selectedMajors,
           'requires_interview': _requiresInterview,
-          'weights': {
-            'university_weight': _univWeight,
-            'major_weight': _majorWeight,
-            'skills_weight': _skillsWeight,
-            'courses_weight': _coursesWeight,
-          }
         }),
       );
 
       if (!mounted) return;
 
-      if (response.statusCode == 201) {
-        Navigator.pop(context, true); // موفقیت
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        Navigator.pop(context, true); // ثبت موفق
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('پروژه با موفقیت ایجاد شد.'),
-            backgroundColor: Colors.green,
+            content: Text('فرصت شغلی با موفقیت ایجاد شد.'),
+            backgroundColor: Color(0xFF10B981),
           ),
         );
       } else {
         final err = jsonDecode(response.body);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('خطا: ${err['detail'] ?? 'خطایی رخ داد'}'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        _showSnack('خطا: ${err['detail'] ?? 'ثبت با خطا مواجه شد'}');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('خطا در ارتباط با سرور: $e'), backgroundColor: Colors.red),
-        );
+        _showSnack('خطا در ارتباط با سرور: $e');
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.orangeAccent,
+      ),
+    );
   }
 
   @override
@@ -173,7 +215,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                     children: [
                       Icon(Icons.add_box_rounded, color: Color(0xFF1E6AFB), size: 24),
                       SizedBox(width: 8),
-                      Text('تعریف پروژه یا کارآموزی جدید', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      Text('تعریف فرصت شغلی جدید (کارفرما)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                     ],
                   ),
                   IconButton(
@@ -192,17 +234,17 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // ۱. عنوان پروژه
-                        const Text('عنوان پروژه *', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        // ۱. عنوان فرصت شغلی
+                        const Text('عنوان فرصت شغلی / پروژه *', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 6),
                         TextFormField(
                           controller: _titleController,
-                          decoration: _inputDecoration('مثال: توسعه رابط کاربری اپلیکیشن موبایل با فلاتر'),
-                          validator: (val) => val == null || val.isEmpty ? 'لطفاً عنوان پروژه را وارد کنید' : null,
+                          decoration: _inputDecoration('مثال: توسعه‌دهنده فلاتر / کارآموز طراحی UI/UX'),
+                          validator: (val) => val == null || val.trim().isEmpty ? 'لطفاً عنوان را وارد کنید' : null,
                         ),
                         const SizedBox(height: 16),
 
-                        // ۲. نوع همکاری و مهلت پیشنهادی
+                        // ۲. نوع همکاری و شهر
                         Row(
                           children: [
                             Expanded(
@@ -217,9 +259,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                                     items: ['پروژه', 'کارآموزی', 'امریه'].map((type) {
                                       return DropdownMenuItem(value: type, child: Text(type, style: const TextStyle(fontSize: 12)));
                                     }).toList(),
-                                    onChanged: (val) {
-                                      if (val != null) setState(() => _selectedProjectType = val);
-                                    },
+                                    onChanged: (val) => setState(() => _selectedProjectType = val),
                                   ),
                                 ],
                               ),
@@ -229,30 +269,15 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text('مهلت پیشنهادی *', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                  const Text('شهر / مکان *', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                                   const SizedBox(height: 6),
-                                  InkWell(
-                                    onTap: () => _selectDeadline(context),
-                                    child: Container(
-                                      height: 48,
-                                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                                      decoration: BoxDecoration(
-                                        border: Border.all(color: const Color(0xFFE5E7EB)),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(
-                                            _selectedDeadline == null
-                                                ? 'انتخاب تاریخ'
-                                                : '${_selectedDeadline!.year}/${_selectedDeadline!.month}/${_selectedDeadline!.day}',
-                                            style: TextStyle(fontSize: 12, color: _selectedDeadline == null ? Colors.grey : Colors.black87),
-                                          ),
-                                          const Icon(Icons.calendar_today_outlined, size: 16, color: Colors.grey),
-                                        ],
-                                      ),
-                                    ),
+                                  DropdownButtonFormField<String>(
+                                    value: _selectedCity,
+                                    decoration: _inputDecoration('انتخاب شهر'),
+                                    items: _cities.map((city) {
+                                      return DropdownMenuItem(value: city, child: Text(city, style: const TextStyle(fontSize: 12)));
+                                    }).toList(),
+                                    onChanged: (val) => setState(() => _selectedCity = val),
                                   ),
                                 ],
                               ),
@@ -261,18 +286,111 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                         ),
                         const SizedBox(height: 16),
 
-                        // ۳. شرح وظایف و خروجی مورد انتظار
+                        // ۳. دسته‌بندی شغلی
+                        const Text('دسته‌بندی شغلی *', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 6),
+                        DropdownButtonFormField<String>(
+                          value: _selectedCategory,
+                          decoration: _inputDecoration('انتخاب حوزه کاری'),
+                          items: _categories.map((cat) {
+                            return DropdownMenuItem(value: cat, child: Text(cat, style: const TextStyle(fontSize: 12)));
+                          }).toList(),
+                          onChanged: (val) => setState(() => _selectedCategory = val),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // ۴. دانشگاه‌های مورد قبول (چند انتخابی)
+                        const Text('دانشگاه‌های اولویت‌دار (اختیاری):', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: _allUniversities.map((u) {
+                            final isSel = _selectedUniversities.contains(u);
+                            return FilterChip(
+                              label: Text(u, style: TextStyle(fontSize: 10, color: isSel ? Colors.white : Colors.black87)),
+                              selected: isSel,
+                              selectedColor: const Color(0xFF1E6AFB),
+                              onSelected: (selected) {
+                                setState(() {
+                                  if (selected) {
+                                    _selectedUniversities.add(u);
+                                  } else {
+                                    _selectedUniversities.remove(u);
+                                  }
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // ۵. رشته‌های مرتبط (چند انتخابی)
+                        const Text('رشته‌های تحصیلی مرتبط (اختیاری):', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: _allMajors.map((m) {
+                            final isSel = _selectedMajors.contains(m);
+                            return FilterChip(
+                              label: Text(m, style: TextStyle(fontSize: 10, color: isSel ? Colors.white : Colors.black87)),
+                              selected: isSel,
+                              selectedColor: const Color(0xFF10B981),
+                              onSelected: (selected) {
+                                setState(() {
+                                  if (selected) {
+                                    _selectedMajors.add(m);
+                                  } else {
+                                    _selectedMajors.remove(m);
+                                  }
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // ۶. مهلت ارسال درخواست
+                        const Text('مهلت ارسال درخواست *', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 6),
+                        InkWell(
+                          onTap: () => _selectDeadline(context),
+                          child: Container(
+                            height: 48,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: const Color(0xFFE5E7EB)),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  _selectedDeadline == null
+                                      ? 'انتخاب تاریخ مهلت (روی تقویم کلیک کنید)'
+                                      : '${_selectedDeadline!.year}/${_selectedDeadline!.month}/${_selectedDeadline!.day}',
+                                  style: TextStyle(fontSize: 12, color: _selectedDeadline == null ? Colors.grey : Colors.black87),
+                                ),
+                                const Icon(Icons.calendar_today_outlined, size: 16, color: Color(0xFF1E6AFB)),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // ۷. شرح وظایف
                         const Text('شرح وظایف و خروجی مورد انتظار *', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 6),
                         TextFormField(
                           controller: _descriptionController,
                           maxLines: 3,
-                          decoration: _inputDecoration('توضیحات دقیق پروژه، انتظارات و مدارک تحویلی...'),
-                          validator: (val) => val == null || val.isEmpty ? 'لطفاً توضیحات را وارد کنید' : null,
+                          decoration: _inputDecoration('توضیحات دقیق فرصت شغلی، انتظارات و مدارک تحویلی...'),
+                          validator: (val) => val == null || val.trim().isEmpty ? 'لطفاً توضیحات را وارد کنید' : null,
                         ),
                         const SizedBox(height: 16),
 
-                        // ۴. مهارت‌های مورد نیاز
+                        // ۸. مهارت‌های مورد نیاز
                         const Text('مهارت‌های مورد نیاز *', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 6),
                         Row(
@@ -312,28 +430,14 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                         ),
                         const SizedBox(height: 16),
 
-                        // ۵. گزینه‌های تکمیلی
+                        // ۹. نیازمند مصاحبه
                         SwitchListTile(
                           value: _requiresInterview,
                           activeColor: const Color(0xFF1E6AFB),
                           contentPadding: EdgeInsets.zero,
                           title: const Text('نیازمند مصاحبه / ملاقات حضوری', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                          subtitle: const Text('پس از تایید رزومه، زمان ملاقات حضوری تعیین خواهد شد.', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                          subtitle: const Text('پس از تایید اولیه، زمان ملاقات حضوری تعیین خواهد شد.', style: TextStyle(fontSize: 10, color: Colors.grey)),
                           onChanged: (val) => setState(() => _requiresInterview = val),
-                        ),
-                        const SizedBox(height: 12),
-
-                        // ۶. آکاردئون تنظیم وزن‌دهی تطبیق (بخش ۵.۲ و ۳ سند UX)
-                        ExpansionTile(
-                          title: const Text('وزن‌دهی تطبیق هوشمند (اختیاری)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1E6AFB))),
-                          subtitle: const Text('تنظیم میزان اهمیت هر معیار در رتبه‌بندی دانشجویان', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                          childrenPadding: const EdgeInsets.all(8),
-                          children: [
-                            _buildWeightSlider('میزان اهمیت دانشگاه', _univWeight, (val) => setState(() => _univWeight = val)),
-                            _buildWeightSlider('میزان اهمیت رشته تحصیلی', _majorWeight, (val) => setState(() => _majorWeight = val)),
-                            _buildWeightSlider('میزان اهمیت مهارت‌ها', _skillsWeight, (val) => setState(() => _skillsWeight = val)),
-                            _buildWeightSlider('میزان اهمیت نمرات دروس مرتبط', _coursesWeight, (val) => setState(() => _coursesWeight = val)),
-                          ],
                         ),
                       ],
                     ),
@@ -342,7 +446,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
               ),
 
               const SizedBox(height: 16),
-              // دکمه‌های اکشن
+              // دکمه‌های ثبت
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -380,29 +484,6 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF1E6AFB))),
-    );
-  }
-
-  Widget _buildWeightSlider(String label, double value, ValueChanged<double> onChanged) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label, style: const TextStyle(fontSize: 11)),
-            Text('${(value * 100).round()}٪', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF1E6AFB))),
-          ],
-        ),
-        Slider(
-          value: value,
-          min: 0.0,
-          max: 1.0,
-          divisions: 20,
-          activeColor: const Color(0xFF1E6AFB),
-          onChanged: onChanged,
-        ),
-      ],
     );
   }
 }

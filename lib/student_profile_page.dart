@@ -109,8 +109,10 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
           _figmaController.text = p['portfolio_links']['figma'] ?? '';
         }
         if (p['resume_file'] != null && p['resume_file'].toString().isNotEmpty) {
-          _resumeServerPath = p['resume_file'];
-          _displayResumeName = "فایل رزومه ثبت‌شده (PDF)";
+          final serverPath = p['resume_file'].toString();
+          _resumeServerPath = serverPath;
+          // استخراج نام فایل پی‌دی‌اف از آدرس سرور جهت نمایش
+          _displayResumeName = serverPath.split('/').last;
         }
       }
     }
@@ -162,8 +164,8 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
 
           if (savedPath != null) {
             setState(() {
-              _displayResumeName = file.name; // نمایش اسم تمیز فایل پی‌دی‌اف کاربر
-              _resumeServerPath = savedPath;
+              _displayResumeName = file.name; // نمایش نام اصلی پی‌دی‌اف انتخابی کاربر
+              _resumeServerPath = savedPath;   // آدرس سرور
             });
             _showSnack('فایل رزومه PDF با موفقیت ذخیره شد.', isError: false);
           }
