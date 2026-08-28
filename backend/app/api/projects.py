@@ -82,24 +82,31 @@ def get_my_projects(db: Session = Depends(get_db), current_user: models.User = D
     return projects
 
 # ۴. لیست درخواست‌های اپلای‌شده دانشجو
+# لیست درخواست‌های اپلای‌شده دانشجو به همراه اطلاعات کامل مصاحبه
 @router.get("/my-applications")
 def get_my_applications(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     if current_user.role != models.UserRole.STUDENT:
         raise HTTPException(status_code=403, detail="تنها دانشجویان به این بخش دسترسی دارند.")
+
     applications = db.query(models.Application).filter(models.Application.student_id == current_user.id).order_by(models.Application.created_at.desc()).all()
     result = []
     for app in applications:
         project = app.project
         if project:
-            status_val = app.status.value if hasattr(app.status, 'value') else str(app.status)
+            raw_status = app.status.value if hasattr(app.status, 'value') else str(app.status)
+            raw_status_clean = str(raw_status).split('.')[-1].lower()
+
             status_fa = "در انتظار بررسی"
-            if status_val == "shortlisted": status_fa = "دعوت به مصاحبه"
-            elif status_val == "accepted": status_fa = "پذیرفته شده"
-            elif status_val == "rejected": status_fa = "رد شده"
+            if raw_status_clean in ["shortlisted", "applicationsstatus.shortlisted"]:
+                status_fa = "دعوت به مصاحبه حضوری"
+            elif raw_status_clean in ["accepted", "applicationsstatus.accepted"]:
+                status_fa = "پذیرفته شده"
+            elif raw_status_clean in ["rejected", "applicationsstatus.rejected"]:
+                status_fa = "رد شده"
 
             result.append({
                 "id": str(app.id),
-                "status": status_val,
+                "status": raw_status_clean,
                 "status_fa": status_fa,
                 "created_at": app.created_at.strftime("%Y/%m/%d") if app.created_at else "",
                 "project_id": str(project.id),
@@ -107,9 +114,11 @@ def get_my_applications(db: Session = Depends(get_db), current_user: models.User
                 "company_name": project.company.name if project.company else "شرکت فناوری",
                 "city": getattr(project, 'city', 'تهران') or "تهران",
                 "project_type": project.project_type,
+                "interview_date": app.interview_date,       # <--- ارسال تاریخ مصاحبه به دانشجو
+                "interview_address": app.interview_address, # <--- ارسال آدرس محل مراجعه به دانشجو
+                "interview_note": app.interview_note,       # <--- ارسال یادداشت کارفرما
             })
     return result
-
 # ۵. بورد مدیریت رزومه‌ها و متقاضیان برای کارفرما
 @router.get("/company-applications")
 def get_company_applications(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):

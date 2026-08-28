@@ -3,9 +3,12 @@ import 'package:pol_app/api_service.dart';
 import 'package:pol_app/create_project_modal.dart';
 import 'package:pol_app/project_details_page.dart';
 import 'package:pol_app/student_profile_page.dart';
+import 'package:pol_app/explore_projects_page.dart';
+import 'package:pol_app/employer_applications_page.dart';
+import 'package:pol_app/chat_threads_page.dart'; // <--- صفحه جدید لیست چت‌ها
 import 'package:shared_preferences/shared_preferences.dart';
 import 'login_page.dart';
-import 'package:pol_app/employer_applications_page.dart';
+
 class DashboardPage extends StatefulWidget {
   final bool isCompany;
 
@@ -33,11 +36,11 @@ class StudentDashboardView extends StatefulWidget {
 }
 
 class _StudentDashboardViewState extends State<StudentDashboardView> {
-  List<dynamic> _myApplicationsList = [];
-  bool _isLoadingApplications = true;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   List<dynamic> _projectsList = [];
+  List<dynamic> _myApplicationsList = [];
   bool _isLoadingProjects = true;
+  bool _isLoadingApplications = true;
 
   // اطلاعات پروفایل کاربر
   String _studentName = 'دانشجوی کارمَچ';
@@ -58,9 +61,11 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token') ?? '';
 
+    // ۱. بارگذاری پروژه‌ها و درخواست‌های ارسال‌شده دانشجو
     final projects = await ApiService.fetchAllProjects(token);
     final applications = await ApiService.fetchMyApplications(token);
 
+    // ۲. بارگذاری اطلاعات کاربر لاگین‌شده از بک‌اند
     if (token.isNotEmpty) {
       final userData = await ApiService.getMe(token);
       if (userData != null) {
@@ -87,6 +92,13 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
       context,
       MaterialPageRoute(builder: (context) => const StudentProfilePage()),
     ).then((_) => _loadDashboardData());
+  }
+
+  void _openChatThreads() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ChatThreadsPage()),
+    );
   }
 
   Future<void> _logout() async {
@@ -118,7 +130,6 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ۱. نوار سمت راست (سایدبار)
               if (!isMobile)
                 SizedBox(
                   width: 250,
@@ -132,7 +143,6 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // ۲. محتوای وسط (فقط این بخش اسکرول می‌شود)
                           Expanded(
                             child: RefreshIndicator(
                               onRefresh: _loadDashboardData,
@@ -159,7 +169,6 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                             ),
                           ),
 
-                          // ۳. باکس‌های سمت چپ (ثابت و چسبان در حالت دسکتاپ)
                           if (isDesktop) ...[
                             Padding(
                               padding: const EdgeInsets.only(left: 24, top: 24, bottom: 24),
@@ -216,6 +225,16 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
             ),
           ),
           const SizedBox(width: 16),
+
+          // آیکون چت بالای صفحه (قابل کلیک جهت باز کردن پیام‌ها)
+          IconButton(
+            icon: const Icon(Icons.chat_bubble_outline, color: Colors.black54, size: 22),
+            onPressed: _openChatThreads,
+            tooltip: 'پیام‌ها و گفتگوها',
+          ),
+          const SizedBox(width: 10),
+
+          // منوی پروفایل
           PopupMenuButton<String>(
             offset: const Offset(0, 45),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -287,6 +306,29 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
               'با شرکت‌های معتبر آشنا شو، حضوری پروژه بگیر و مسیر شغلی‌ات را بساز.',
               style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.5),
             ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ExploreProjectsPage()),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00E676),
+                foregroundColor: Colors.black87,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('جستجو در تمام فرصت‌ها', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                  SizedBox(width: 6),
+                  Icon(Icons.arrow_back_ios, size: 12, textDirection: TextDirection.ltr),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -323,7 +365,6 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
       );
     }
 
-    // 📱 در حالت موبایل (منوی ۳ خطی): کارت‌ها عمودی و تک تک زیر هم قرار می‌گیرند
     if (isMobile) {
       return ListView.separated(
         shrinkWrap: true,
@@ -334,14 +375,13 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
       );
     }
 
-    // 💻 در حالت دسکتاپ: گرید پاسخ‌گو
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: _projectsList.length,
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: 340,
-        mainAxisExtent: 250,
+        mainAxisExtent: 260,
         crossAxisSpacing: 16,
         mainAxisSpacing: 16,
       ),
@@ -358,8 +398,8 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     final matchScore = item['match_score'] ?? 80;
 
     return Container(
-      width: width, // در موبایل ۱۰۰٪ عرض را پر می‌کند
-      height: 250,
+      width: width,
+      height: 260,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -449,6 +489,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     );
   }
 
+  // 🔴 متد جدید جایگزین شده: نمایش درخواست‌های اپلای‌شده دانشجو + باکس اطلاعات مصاحبه حضوری
   Widget _buildRecentRequestsSection({required bool isMobile}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -457,9 +498,9 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             const Text('درخواست‌های ارسال‌شده من (وضعیت اپلای)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
-            TextButton(
+            IconButton(
+              icon: const Icon(Icons.refresh, size: 18, color: Color(0xFF1E6AFB)),
               onPressed: _loadDashboardData,
-              child: const Row(children: [Text('بروزرسانی', style: TextStyle(fontSize: 12, color: Color(0xFF1E6AFB))), Icon(Icons.refresh, size: 16, color: Color(0xFF1E6AFB))]),
             ),
           ],
         ),
@@ -477,45 +518,96 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: _myApplicationsList.length,
-          separatorBuilder: (context, index) => const SizedBox(height: 8),
+          separatorBuilder: (context, index) => const SizedBox(height: 10),
           itemBuilder: (context, index) {
             final app = _myApplicationsList[index];
             final statusFa = app['status_fa'] ?? 'در انتظار بررسی';
-            final statusRaw = app['status'] ?? 'applied';
+            final statusRaw = (app['status'] ?? 'applied').toString().toLowerCase();
+
+            bool isShortlisted = statusRaw.contains('shortlisted');
 
             Color statusColor = Colors.orange;
             Color statusBg = const Color(0xFFFFF3E0);
-            if (statusRaw == 'shortlisted') {
-              statusColor = Colors.blue;
+            if (isShortlisted) {
+              statusColor = const Color(0xFF1E6AFB);
               statusBg = const Color(0xFFE3F2FD);
-            } else if (statusRaw == 'accepted') {
+            } else if (statusRaw.contains('accepted')) {
               statusColor = Colors.green;
               statusBg = const Color(0xFFE8F5E9);
-            } else if (statusRaw == 'rejected') {
+            } else if (statusRaw.contains('rejected')) {
               statusColor = Colors.red;
               statusBg = const Color(0xFFFFEBEE);
             }
 
             return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
-              child: Row(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: isShortlisted ? const Color(0xFF1E6AFB) : const Color(0xFFE2E8F0)),
+                boxShadow: [
+                  if (isShortlisted) BoxShadow(color: const Color(0xFF1E6AFB).withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 2))
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(app['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                        const SizedBox(height: 4),
-                        Text('${app['company_name']} • ${app['city']} • ${app['project_type']}', style: const TextStyle(color: Colors.grey, fontSize: 11)),
-                      ],
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(app['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B))),
+                            const SizedBox(height: 4),
+                            Text('${app['company_name']} • ${app['city']} • ${app['project_type']}', style: const TextStyle(color: Colors.grey, fontSize: 11)),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(color: statusBg, borderRadius: BorderRadius.circular(6)),
+                        child: Text(statusFa, style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+
+                  // 📅 نمایش باکس سبز/آبی زمان و آدرس مصاحبه حضوری (در صورت دعوت شدن دانشجو)
+                  if (isShortlisted && app['interview_date'] != null) ...[
+                    const Divider(height: 20),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFECFDF5),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFA7F3D0)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.event_available, size: 18, color: Color(0xFF10B981)),
+                              const SizedBox(width: 6),
+                              Text('زمان مصاحبه حضوری: ${app['interview_date']}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF047857))),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              const Icon(Icons.location_on, size: 18, color: Color(0xFF10B981)),
+                              const SizedBox(width: 6),
+                              Expanded(child: Text('محل مراجعه: ${app['interview_address']}', style: const TextStyle(fontSize: 11, color: Color(0xFF065F46)))),
+                            ],
+                          ),
+                          if (app['interview_note'] != null && app['interview_note'].toString().isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text('یادداشت کارفرما: ${app['interview_note']}', style: const TextStyle(fontSize: 10, color: Colors.black54)),
+                          ]
+                        ],
+                      ),
                     ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(color: statusBg, borderRadius: BorderRadius.circular(6)),
-                    child: Text(statusFa, style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold)),
-                  ),
+                  ],
                 ],
               ),
             );
@@ -607,8 +699,19 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
               padding: EdgeInsets.zero,
               children: [
                 _buildNavItem(Icons.dashboard, 'داشبورد', isActive: true),
-                _buildNavItem(Icons.star_outline, 'پروژه‌های پیشنهادی'),
+                _buildNavItem(
+                  Icons.search,
+                  'جستجو و کشف',
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const ExploreProjectsPage()));
+                  },
+                ),
                 _buildNavItem(Icons.person_outline, 'پروفایل من', onTap: _openProfileBuilder),
+                _buildNavItem(
+                  Icons.chat_bubble_outline,
+                  'پیام‌ها',
+                  onTap: _openChatThreads, // <--- اتصال پیام‌ها در سایدبار دانشجو
+                ),
                 _buildNavItem(Icons.settings_outlined, 'تنظیمات'),
                 _buildNavItem(
                   Icons.exit_to_app,
@@ -665,12 +768,7 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   List<dynamic> _myProjects = [];
   bool _isLoadingMyProjects = true;
-  void _openEmployerApplications() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const EmployerApplicationsPage()),
-    );
-  }
+
   @override
   void initState() {
     super.initState();
@@ -689,6 +787,20 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
         _isLoadingMyProjects = false;
       });
     }
+  }
+
+  void _openEmployerApplications() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const EmployerApplicationsPage()),
+    );
+  }
+
+  void _openChatThreads() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ChatThreadsPage()),
+    );
   }
 
   Future<void> _logout() async {
@@ -781,68 +893,35 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
             const SizedBox(width: 8),
           ],
           const Spacer(),
-
-          // ۱. دکمه جدید مدیریت متقاضیان
           ElevatedButton.icon(
             onPressed: _openEmployerApplications,
-            icon: const Icon(Icons.people_outline, size: 16),
-            label: const Text('مدیریت متقاضیان', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            icon: const Icon(Icons.people, size: 16),
+            label: const Text('مدیریت متقاضیان', style: TextStyle(fontSize: 12)),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white,
               foregroundColor: const Color(0xFF1E6AFB),
-              elevation: 0,
               side: const BorderSide(color: Color(0xFFE5E7EB)),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             ),
           ),
-          const SizedBox(width: 10),
-
-          // ۲. دکمه ثبت پروژه جدید
+          const SizedBox(width: 12),
           ElevatedButton.icon(
             onPressed: () => _openCreateProjectModal(context),
             icon: const Icon(Icons.add, size: 18),
             label: const Text('پروژه جدید', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1E6AFB),
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E6AFB), foregroundColor: Colors.white),
           ),
           const SizedBox(width: 16),
-
-          // ۳. منوی آواتار و خروج
+          IconButton(
+            icon: const Icon(Icons.chat_bubble_outline, color: Colors.black54, size: 22),
+            onPressed: _openChatThreads, // <--- چت کارفرما
+          ),
+          const SizedBox(width: 10),
           PopupMenuButton<String>(
-            offset: const Offset(0, 45),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             onSelected: (value) {
-              if (value == 'applications') _openEmployerApplications();
               if (value == 'logout') _logout();
             },
             itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'applications',
-                child: Row(
-                  children: [
-                    Icon(Icons.people_outline, size: 18, color: Colors.black87),
-                    SizedBox(width: 8),
-                    Text('مدیریت متقاضیان', style: TextStyle(fontSize: 12)),
-                  ],
-                ),
-              ),
-              const PopupMenuDivider(),
-              const PopupMenuItem(
-                value: 'logout',
-                child: Row(
-                  children: [
-                    Icon(Icons.exit_to_app, size: 18, color: Colors.red),
-                    SizedBox(width: 8),
-                    Text('خروج از حساب', style: TextStyle(fontSize: 12, color: Colors.red, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-              ),
+              const PopupMenuItem(value: 'logout', child: Text('خروج از حساب', style: TextStyle(color: Colors.red))),
             ],
             child: CircleAvatar(
               radius: 18,
@@ -869,10 +948,20 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
           children: [
             const Text('استعدادهای نخبگان دانشگاهی را برای پروژه‌های خود جذب کنید', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => _openCreateProjectModal(context),
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E676), foregroundColor: Colors.black87),
-              child: const Text('تعریف پروژه یا کارآموزی جدید', style: TextStyle(fontWeight: FontWeight.bold)),
+            Row(
+              children: [
+                ElevatedButton(
+                  onPressed: () => _openCreateProjectModal(context),
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E676), foregroundColor: Colors.black87),
+                  child: const Text('تعریف پروژه جدید', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(width: 12),
+                OutlinedButton(
+                  onPressed: _openEmployerApplications,
+                  style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white)),
+                  child: const Text('بررسی رزومه‌ها'),
+                ),
+              ],
             ),
           ],
         ),
@@ -904,7 +993,6 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
       );
     }
 
-    // 📱 حالت موبایل: تک تک زیر هم
     if (isMobile) {
       return ListView.separated(
         shrinkWrap: true,
@@ -915,7 +1003,6 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
       );
     }
 
-    // 💻 حالت دسکتاپ: گرید
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -937,7 +1024,7 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
     final skills = (item['required_skills'] as List<dynamic>?)?.cast<String>() ?? [];
 
     return Container(
-      width: width, // در موبایل ۱۰۰٪ عرض را پر می‌کند
+      width: width,
       height: 240,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -945,11 +1032,7 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: const Color(0xFFE5E7EB)),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          )
+          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 2)),
         ],
       ),
       child: Column(
@@ -1024,24 +1107,36 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
       child: Column(
         children: [
           const SizedBox(height: 24),
-          const Icon(Icons.domain, color: Colors.white, size: 48),
+          _buildLogo(),
           const SizedBox(height: 32),
           Expanded(
             child: ListView(
+              padding: EdgeInsets.zero,
               children: [
                 _buildNavItem(Icons.dashboard, 'داشبورد کارفرما', isActive: true),
                 _buildNavItem(Icons.add_box_outlined, 'ثبت پروژه جدید', onTap: () => _openCreateProjectModal(context)),
-                _buildNavItem(Icons.exit_to_app, 'خروج از حساب', onTap: _logout),
-                // داخل متد _buildSidebarContent:
+                _buildNavItem(Icons.people_outline, 'مدیریت درخواست‌ها (رزومه‌ها)', onTap: _openEmployerApplications), // <--- اتصال سایدبار
+                _buildNavItem(Icons.chat_bubble_outline, 'پیام‌ها', onTap: _openChatThreads), // <--- چت
                 _buildNavItem(
-                  Icons.people_outline,
-                  'مدیریت درخواست‌ها (رزومه‌ها)',
-                  onTap: _openEmployerApplications, // <--- اتصال دکمه
+                  Icons.exit_to_app,
+                  'خروج از حساب',
+                  onTap: _logout,
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildLogo() {
+    return Center(
+      child: Image.asset(
+        'assets/Untitled_design-removebg-preview.png',
+        height: 85,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => const Icon(Icons.domain, color: Colors.white, size: 48),
       ),
     );
   }
