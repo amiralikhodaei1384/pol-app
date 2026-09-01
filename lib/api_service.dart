@@ -43,7 +43,35 @@ class ApiService {
       return false;
     }
   }
+  // ویرایش اطلاعات شرکت توسط کارفرما
+  static Future<bool> saveCompanyProfile({
+    required String token,
+    String? name,
+    String? about,
+    String? website,
+    String? address,
+  }) async {
+    try {
+      final res = await http.post(
+        Uri.parse("$baseUrl/auth/company-profile"),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+        body: jsonEncode({
+          "name": name,
+          "about": about,
+          "website": website,
+          "address": address,
+        }),
+      ).timeout(const Duration(seconds: 5));
 
+      return res.statusCode == 200;
+    } catch (e) {
+      print("خطا در ذخیره پروفایل شرکت: $e");
+      return false;
+    }
+  }
   // ۲. ورود (Login) و دریافت توکن
   static Future<Map<String, dynamic>?> login(String email, String password) async {
     try {

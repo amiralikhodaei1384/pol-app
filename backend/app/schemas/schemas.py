@@ -44,8 +44,17 @@ class UserOut(UserBase):
 class CompanyOut(BaseModel):
     id: UUID
     name: str
+    about: Optional[str] = None
+    website: Optional[str] = None
+    address: Optional[str] = None
     class Config:
         from_attributes = True
+
+class CompanyProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    about: Optional[str] = None
+    website: Optional[str] = None
+    address: Optional[str] = None
 
 # ----------------------------------------------------
 # 3. Schemas پروژه (Project Schemas)

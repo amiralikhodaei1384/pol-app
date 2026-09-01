@@ -51,9 +51,10 @@ class Company(Base):
     name = Column(String, nullable=False)
     national_id = Column(String, unique=True, index=True, nullable=False)
     website = Column(String, nullable=True)
+    about = Column(Text, nullable=True)        # <--- فیلد جدید: درباره شرکت
+    address = Column(String, nullable=True)
     is_active = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    address = Column(String, nullable=True)
 
     projects = relationship("Project", back_populates="company")
     representatives = relationship("CompanyRepresentative", back_populates="company")

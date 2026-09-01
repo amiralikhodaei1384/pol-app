@@ -141,8 +141,37 @@ def get_me(current_user: models.User = Depends(get_current_user)):
             "resume_file": p.resume_file,
             "portfolio_links": p.portfolio_links,
         }
+    elif current_user.role == models.UserRole.COMPANY_REP and current_user.company_rep_profile:
+        c = current_user.company_rep_profile.company
+        response["company"] = {
+            "name": c.name if c else "",
+            "about": c.about if c else "",
+            "website": c.website if c else "",
+            "address": c.address if c else "",
+        }
 
     return response
+
+
+# روتر جدید: ثبت و ویرایش اطلاعات شرکت (درباره شرکت، آدرس، وب‌سایت)
+@router.post("/company-profile")
+def update_company_profile(
+        body: schemas.CompanyProfileUpdate,
+        db: Session = Depends(get_db),
+        current_user: models.User = Depends(get_current_user)
+):
+    if current_user.role != models.UserRole.COMPANY_REP or not current_user.company_rep_profile:
+        raise HTTPException(status_code=403, detail="تنها نمایندگان شرکت مجاز به ویرایش هستند.")
+
+    company = current_user.company_rep_profile.company
+    if company:
+        if body.name: company.name = body.name
+        if body.about: company.about = body.about
+        if body.website: company.website = body.website
+        if body.address: company.address = body.address
+        db.commit()
+
+    return {"message": "اطلاعات شرکت با موفقیت بروزرسانی شد."}
 
 
 # روتر جدید: دریافت فایل رزومه واقعی و ذخیره با اسم دانشجو روی سرور
