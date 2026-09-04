@@ -74,11 +74,11 @@ class ProjectCreate(BaseModel):
     title: str = Field(..., min_length=3, max_length=150)
     description: str
     required_skills: List[str]
-    deadline: datetime
+    deadline: str  # <--- تغییر از datetime به str جهت پذیرش تاریخ شمسی
     project_type: ProjectType = Field(default=ProjectType.PROJECT)
-    city: Optional[str] = "نامشخص"           # <--- تغییر به Optional برای جلوگیری از ارور پروژه‌های قدیمی
-    category: Optional[str] = "عمومی"         # <--- تغییر به Optional
-    related_major: Optional[str] = "سایر"     # <--- تغییر به Optional
+    city: Optional[str] = "تهران"
+    category: Optional[str] = "عمومی"
+    related_major: Optional[str] = "سایر"
     target_universities: Optional[List[str]] = []
     target_majors: Optional[List[str]] = []
     requires_interview: bool = Field(default=True)

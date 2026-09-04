@@ -102,7 +102,7 @@ class Project(Base):
     title = Column(String(150), nullable=False)
     description = Column(Text, nullable=False)
     required_skills = Column(JSON, nullable=False)
-    deadline = Column(DateTime, nullable=False)
+    deadline = Column(String, nullable=False)
     project_type = Column(String(50), nullable=False)
     city = Column(String(100), nullable=True)             # بدون دیفالت هاردکد
     category = Column(String(100), nullable=True)         # بدون دیفالت هاردکد

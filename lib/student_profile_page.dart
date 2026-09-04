@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:pol_app/api_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
+import 'package:pol_app/shamsi_date_picker_dialog.dart';
 class StudentProfilePage extends StatefulWidget {
   const StudentProfilePage({super.key});
 
@@ -631,11 +631,29 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _buildMinimalField(
-                          label: 'تاریخ تولد',
-                          controller: _birthDateController,
-                          hint: '1380/05/12',
-                          icon: Icons.cake_outlined,
+                        child: InkWell(
+                          onTap: () async {
+                            final pickedDate = await showShamsiDatePicker(
+                              context: context,
+                              title: 'انتخاب تاریخ تولد',
+                              startYear: 1340,
+                              endYear: 1395,
+                              initialYear: 1380,
+                            );
+                            if (pickedDate != null) {
+                              setState(() {
+                                _birthDateController.text = pickedDate;
+                              });
+                            }
+                          },
+                          child: IgnorePointer(
+                            child: _buildMinimalField(
+                              label: 'تاریخ تولد',
+                              controller: _birthDateController,
+                              hint: 'کلیک جهت انتخاب تاریخ',
+                              icon: Icons.cake_outlined,
+                            ),
+                          ),
                         ),
                       ),
                     ],

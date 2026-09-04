@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pol_app/api_service.dart';
+import 'package:pol_app/shamsi_date_picker_dialog.dart';
 
 class CreateProjectModal extends StatefulWidget {
   const CreateProjectModal({super.key});
@@ -33,7 +34,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
   List<String> _allMajors = ['مهندسی کامپیوتر', 'مهندسی برق', 'مهندسی صنایع', 'مهندسی مکانیک', 'علوم کامپیوتر', 'سایر'];
 
   final List<String> _skillsList = [];
-  DateTime? _selectedDeadline;
+  String? _selectedDeadline; // تاریخ شمسی
   bool _requiresInterview = true;
   bool _isLoading = false;
 
@@ -80,15 +81,18 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
   }
 
   Future<void> _selectDeadline(BuildContext context) async {
-    final DateTime? picked = await showDatePicker(
+    final date = await showShamsiDatePicker(
       context: context,
-      initialDate: DateTime.now().add(const Duration(days: 30)),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      title: 'انتخاب مهلت ارسال درخواست',
+      startYear: 1405,
+      endYear: 1410,
+      initialYear: 1405,
+      initialMonth: 4,
+      initialDay: 1,
     );
-    if (picked != null) {
+    if (date != null) {
       setState(() {
-        _selectedDeadline = picked;
+        _selectedDeadline = date;
       });
     }
   }
@@ -99,12 +103,11 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
       _addSkill();
     }
 
-    // ۲. اعتبارسنجی ورودی‌های متنی
+    // ۲. اعتبارسنجی ورودی‌های فرم سمت فرانت‌اند
     if (!_formKey.currentState!.validate()) {
       return;
     }
 
-    // ۳. بررسی تفکیک‌شده فیلدها با پیام‌های خطای مشخص
     if (_selectedProjectType == null) {
       _showSnack('لطفاً «نوع همکاری» را انتخاب کنید.');
       return;
@@ -125,7 +128,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
       return;
     }
 
-    if (_selectedDeadline == null) {
+    if (_selectedDeadline == null || _selectedDeadline!.isEmpty) {
       _showSnack('لطفاً «مهلت ارسال درخواست» (تاریخ) را تعیین کنید.');
       return;
     }
@@ -148,7 +151,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
           'title': _titleController.text.trim(),
           'description': _descriptionController.text.trim(),
           'required_skills': _skillsList,
-          'deadline': _selectedDeadline!.toIso8601String(),
+          'deadline': _selectedDeadline,
           'project_type': _selectedProjectType,
           'city': _selectedCity,
           'category': _selectedCategory,
@@ -156,7 +159,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
           'target_majors': _selectedMajors,
           'requires_interview': _requiresInterview,
         }),
-      );
+      ).timeout(const Duration(seconds: 10));
 
       if (!mounted) return;
 
@@ -169,16 +172,63 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
           ),
         );
       } else {
-        final err = jsonDecode(response.body);
-        _showSnack('خطا: ${err['detail'] ?? 'ثبت با خطا مواجه شد'}');
+        // ۳. مدیریت هوشمند خطاهای بک‌اند (از جمله ارور ۴۲۲)
+        _handleBackendError(response);
       }
     } catch (e) {
       if (mounted) {
-        _showSnack('خطا در ارتباط با سرور: $e');
+        _showSnack('خطا در ارتباط با سرور. لطفاً اتصال اینترنت خود را بررسی کنید.');
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  // موتور مدیریت و ترجمه خطاهای سرور (HTTP Errors & 422 Unprocessable Entity)
+  void _handleBackendError(http.Response response) {
+    String errorMessage = 'خطایی در ثبت اطلاعات رخ داد.';
+
+    try {
+      final err = jsonDecode(response.body);
+
+      // پارس کردن ارور ۴۲۲ اعتبارسنجی فست‌پی‌آی
+      if (response.statusCode == 422 && err['detail'] is List) {
+        final List details = err['detail'];
+        List<String> parsedErrors = [];
+
+        for (var item in details) {
+          if (item is Map) {
+            final loc = item['loc'] as List?;
+            final field = loc != null && loc.isNotEmpty ? loc.last.toString() : '';
+
+            if (field == 'title') {
+              parsedErrors.add('• عنوان پروژه بسیار کوتاه است (حداقل ۳ کاراکتر).');
+            } else if (field == 'description') {
+              parsedErrors.add('• شرح وظایف بسیار کوتاه است (حداقل ۱۰ کاراکتر).');
+            } else if (field == 'required_skills') {
+              parsedErrors.add('• مهارت‌های وارد شده معتبر نیستند.');
+            } else if (field == 'deadline') {
+              parsedErrors.add('• فرمت تاریخ مهلت نامعتبر است.');
+            } else {
+              parsedErrors.add('• ${item['msg'] ?? 'اطلاعات وارد شده معتبر نیست.'}');
+            }
+          }
+        }
+        if (parsedErrors.isNotEmpty) {
+          errorMessage = parsedErrors.join('\n');
+        }
+      } else if (err['detail'] is String) {
+        errorMessage = err['detail'];
+      } else if (response.statusCode == 401) {
+        errorMessage = 'نشست کاری شما منقضی شده است. لطفاً دوباره وارد شوید.';
+      } else if (response.statusCode == 403) {
+        errorMessage = 'شما دسترسی لازم برای انجام این کار را ندارید.';
+      } else if (response.statusCode >= 500) {
+        errorMessage = 'خطای داخلی سرور. لطفاً بعداً دوباره تلاش کنید.';
+      }
+    } catch (_) {}
+
+    _showSnack(errorMessage);
   }
 
   void _showSnack(String message) {
@@ -235,12 +285,20 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // ۱. عنوان فرصت شغلی
-                        const Text('عنوان فرصت شغلی / پروژه *', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        const Text('عنوان فرصت شغلی / پروژه * (حداقل ۳ کاراکتر)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 6),
                         TextFormField(
                           controller: _titleController,
                           decoration: _inputDecoration('مثال: توسعه‌دهنده فلاتر / کارآموز طراحی UI/UX'),
-                          validator: (val) => val == null || val.trim().isEmpty ? 'لطفاً عنوان را وارد کنید' : null,
+                          validator: (val) {
+                            if (val == null || val.trim().isEmpty) {
+                              return 'لطفاً عنوان پروژه را وارد کنید';
+                            }
+                            if (val.trim().length < 3) {
+                              return 'عنوان پروژه باید حداقل ۳ کاراکتر باشد';
+                            }
+                            return null;
+                          },
                         ),
                         const SizedBox(height: 16),
 
@@ -367,10 +425,12 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(
-                                  _selectedDeadline == null
-                                      ? 'انتخاب تاریخ مهلت (روی تقویم کلیک کنید)'
-                                      : '${_selectedDeadline!.year}/${_selectedDeadline!.month}/${_selectedDeadline!.day}',
-                                  style: TextStyle(fontSize: 12, color: _selectedDeadline == null ? Colors.grey : Colors.black87),
+                                  _selectedDeadline ?? 'انتخاب تاریخ مهلت (روی تقویم کلیک کنید)',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: _selectedDeadline == null ? Colors.grey : Colors.black87,
+                                    fontWeight: _selectedDeadline == null ? FontWeight.normal : FontWeight.bold,
+                                  ),
                                 ),
                                 const Icon(Icons.calendar_today_outlined, size: 16, color: Color(0xFF1E6AFB)),
                               ],
@@ -380,13 +440,21 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                         const SizedBox(height: 16),
 
                         // ۷. شرح وظایف
-                        const Text('شرح وظایف و خروجی مورد انتظار *', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        const Text('شرح وظایف و خروجی مورد انتظار * (حداقل ۱۰ کاراکتر)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 6),
                         TextFormField(
                           controller: _descriptionController,
                           maxLines: 3,
                           decoration: _inputDecoration('توضیحات دقیق فرصت شغلی، انتظارات و مدارک تحویلی...'),
-                          validator: (val) => val == null || val.trim().isEmpty ? 'لطفاً توضیحات را وارد کنید' : null,
+                          validator: (val) {
+                            if (val == null || val.trim().isEmpty) {
+                              return 'لطفاً شرح وظایف را وارد کنید';
+                            }
+                            if (val.trim().length < 10) {
+                              return 'شرح وظایف باید حداقل ۱۰ کاراکتر باشد';
+                            }
+                            return null;
+                          },
                         ),
                         const SizedBox(height: 16),
 

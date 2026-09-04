@@ -185,7 +185,7 @@ def get_all_projects(
         match_score = calculate_match_score(student_profile, p) if student_profile else 75
         p_dict = {
             "id": str(p.id), "title": p.title, "description": p.description, "required_skills": p.required_skills,
-            "deadline": p.deadline.isoformat() if p.deadline else None, "project_type": p.project_type,
+            "deadline": str(p.deadline) if p.deadline else "نامشخص", # <--- خواندن مستقیم تاریخ شمسی, "project_type": p.project_type,
             "city": getattr(p, 'city', 'تهران') or "تهران", "category": getattr(p, 'category', 'توسعه نرم‌افزار') or "توسعه نرم‌افزار",
             "target_universities": p.target_universities or [], "target_majors": p.target_majors or [],
             "requires_interview": p.requires_interview, "company_name": p.company.name if p.company else "شرکت فناوری",

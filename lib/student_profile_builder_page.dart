@@ -4,7 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:pol_app/api_service.dart';
 import 'package:pol_app/dashboard_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
+import 'package:pol_app/shamsi_date_picker_dialog.dart';
 class StudentProfileBuilderPage extends StatefulWidget {
   const StudentProfileBuilderPage({super.key});
 
@@ -782,12 +782,35 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildLabel('تاریخ تولد'),
-                        TextField(controller: _birthDateController, decoration: _inputDec('مثال: 1380/05/12')),
-                      ],
+                    child: InkWell(
+                      onTap: () async {
+                        final pickedDate = await showShamsiDatePicker(
+                          context: context,
+                          title: 'انتخاب تاریخ تولد',
+                          startYear: 1340,
+                          endYear: 1395,
+                          initialYear: 1380,
+                        );
+                        if (pickedDate != null) {
+                          setState(() {
+                            _birthDateController.text = pickedDate;
+                          });
+                        }
+                      },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildLabel('تاریخ تولد'),
+                          IgnorePointer(
+                            child: TextField(
+                              controller: _birthDateController,
+                              decoration: _inputDec('کلیک جهت انتخاب تاریخ').copyWith(
+                                suffixIcon: const Icon(Icons.calendar_today, size: 18, color: Color(0xFF1E6AFB)),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
