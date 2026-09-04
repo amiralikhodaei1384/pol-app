@@ -243,10 +243,22 @@ def create_project(project_in: schemas.ProjectCreate, db: Session = Depends(get_
 def schedule_interview(app_id: str, body: schemas.ScheduleInterviewSchema, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     app_obj = db.query(models.Application).filter(models.Application.id == app_id).first()
     if not app_obj: raise HTTPException(status_code=404, detail="درخواست یافت نشد.")
+
     app_obj.status = models.ApplicationStatus.SHORTLISTED
     app_obj.interview_date = body.interview_date
     app_obj.interview_address = body.interview_address
     app_obj.interview_note = body.interview_note
+
+    # 🔔 ثبت نوتیفیکیشن خودکار برای دانشجو
+    notif = models.Notification(
+        user_id=app_obj.student_id,
+        title="دعوت به مصاحبه حضوری",
+        message=f"شما برای پروژه «{app_obj.project.title if app_obj.project else ''}» به مصاحبه حضوری دعوت شدید. تاریخ: {body.interview_date}",
+        type="interview",
+        link_id=str(app_obj.project_id)
+    )
+    db.add(notif)
+
     db.commit()
     return {"message": "دعوت به مصاحبه ثبت شد."}
 
@@ -282,9 +294,24 @@ def get_messages(thread_id: str, db: Session = Depends(get_db), current_user: mo
     return [{"id": str(m.id), "sender_id": str(m.sender_id), "is_me": m.sender_id == current_user.id, "text": m.text, "created_at": m.created_at.strftime("%H:%M") if m.created_at else ""} for m in msgs]
 
 @router.post("/chat/send")
-def send_message(body: schemas.SendMessageSchema, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    msg = models.ChatMessage(thread_id=body.thread_id, sender_id=current_user.id, text=body.text)
+def send_message(body: schemas.SendMessageSchema, db: Session = Depends(get_db), user: models.User = Depends(get_current_user)):
+    msg = models.ChatMessage(thread_id=body.thread_id, sender_id=user.id, text=body.text)
     db.add(msg)
+
+    # 🔔 ثبت نوتیفیکیشن پیام جدید برای طرف مقابل
+    thread = db.query(models.ChatThread).filter(models.ChatThread.id == body.thread_id).first()
+    if thread:
+        recipient_id = thread.student_id if user.id == thread.employer_id else thread.employer_id
+        sender_name = "کارفرما" if user.role == models.UserRole.COMPANY_REP else (user.student_profile.full_name if (user.student_profile and user.student_profile.full_name) else "دانشجو")
+        notif = models.Notification(
+            user_id=recipient_id,
+            title="پیام جدید در چت",
+            message=f"پیام جدید از طرف {sender_name}: {body.text[:35]}...",
+            type="chat",
+            link_id=str(thread.id)
+        )
+        db.add(notif)
+
     db.commit()
     return {"message": "پیام ارسال شد."}
 
@@ -296,6 +323,67 @@ def apply_for_project(project_id: str, db: Session = Depends(get_db), current_us
     if not project: raise HTTPException(status_code=404, detail="پروژه یافت نشد.")
     if db.query(models.Application).filter(models.Application.student_id == current_user.id, models.Application.project_id == project.id).first():
         raise HTTPException(status_code=400, detail="شما قبلاً برای این پروژه درخواست ارسال کرده‌اید.")
+
     db.add(models.Application(student_id=current_user.id, project_id=project.id, status=models.ApplicationStatus.APPLIED))
+
+    # 🔔 ثبت نوتیفیکیشن خودکار برای کارفرما
+    employer_rep = db.query(models.CompanyRepresentative).filter(models.CompanyRepresentative.company_id == project.company_id).first()
+    if employer_rep:
+        student_name = current_user.student_profile.full_name if (current_user.student_profile and current_user.student_profile.full_name) else "یک دانشجو"
+        notif = models.Notification(
+            user_id=employer_rep.user_id,
+            title="درخواست جدید برای پروژه",
+            message=f"{student_name} برای پروژه «{project.title}» درخواست ارسال کرد.",
+            type="application",
+            link_id=str(project.id)
+        )
+        db.add(notif)
+
     db.commit()
     return {"message": "درخواست شما با موفقیت ثبت شد."}
+
+
+
+
+
+
+
+# دریافت تعداد پیام‌ها و نوتیفیکیشن‌های خوانده‌نشده
+@router.get("/notifications/counts")
+def get_notification_counts(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    unread_notifs = db.query(models.Notification).filter(
+        models.Notification.user_id == current_user.id,
+        models.Notification.is_read == False
+    ).count()
+
+    unread_chats = db.query(models.Notification).filter(
+        models.Notification.user_id == current_user.id,
+        models.Notification.type == "chat",
+        models.Notification.is_read == False
+    ).count()
+
+    return {
+        "unread_notifications": unread_notifs,
+        "unread_chats": unread_chats
+    }
+
+# دریافت لیست همه نوتیفیکیشن‌های کاربر
+@router.get("/notifications/")
+def get_notifications(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    notifs = db.query(models.Notification).filter(models.Notification.user_id == current_user.id).order_by(models.Notification.created_at.desc()).all()
+
+    res = []
+    for n in notifs:
+        res.append({
+            "id": str(n.id),
+            "title": n.title,
+            "message": n.message,
+            "type": n.type,
+            "is_read": n.is_read,
+            "created_at": n.created_at.strftime("%Y/%m/%d - %H:%M") if n.created_at else ""
+        })
+        # علامت‌گذاری به عنوان خوانده‌شده
+        n.is_read = True
+
+    db.commit()
+    return res

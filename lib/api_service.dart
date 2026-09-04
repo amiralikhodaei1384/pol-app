@@ -445,4 +445,33 @@ class ApiService {
       return false;
     }
   }
+  // دریافت تعداد اعلان‌ها و پیام‌های خوانده‌نشده
+  static Future<Map<String, dynamic>> fetchNotificationCounts(String token) async {
+    try {
+      final res = await http.get(
+        Uri.parse("$baseUrl/projects/notifications/counts"),
+        headers: {"Authorization": "Bearer $token"},
+      ).timeout(const Duration(seconds: 5));
+
+      if (res.statusCode == 200) {
+        return jsonDecode(res.body);
+      }
+    } catch (e) {}
+    return {"unread_notifications": 0, "unread_chats": 0};
+  }
+
+// دریافت لیست کامل نوتیفیکیشن‌ها
+  static Future<List<dynamic>> fetchNotifications(String token) async {
+    try {
+      final res = await http.get(
+        Uri.parse("$baseUrl/projects/notifications/"),
+        headers: {"Authorization": "Bearer $token"},
+      ).timeout(const Duration(seconds: 5));
+
+      if (res.statusCode == 200) {
+        return jsonDecode(res.body);
+      }
+    } catch (e) {}
+    return [];
+  }
 }

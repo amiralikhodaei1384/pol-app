@@ -5,10 +5,12 @@ import 'package:pol_app/project_details_page.dart';
 import 'package:pol_app/student_profile_page.dart';
 import 'package:pol_app/explore_projects_page.dart';
 import 'package:pol_app/employer_applications_page.dart';
-import 'package:pol_app/chat_threads_page.dart'; // <--- صفحه جدید لیست چت‌ها
+import 'package:pol_app/chat_threads_page.dart';
+import 'package:pol_app/company_profile_page.dart';
+import 'package:pol_app/notifications_page.dart';
+import 'package:pol_app/login_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'login_page.dart';
-import 'company_profile_page.dart';
+
 class DashboardPage extends StatefulWidget {
   final bool isCompany;
 
@@ -36,6 +38,8 @@ class StudentDashboardView extends StatefulWidget {
 }
 
 class _StudentDashboardViewState extends State<StudentDashboardView> {
+  int _unreadNotificationsCount = 0;
+  int _unreadChatsCount = 0;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   List<dynamic> _projectsList = [];
   List<dynamic> _myApplicationsList = [];
@@ -65,9 +69,18 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     final projects = await ApiService.fetchAllProjects(token);
     final applications = await ApiService.fetchMyApplications(token);
 
-    // ۲. بارگذاری اطلاعات کاربر لاگین‌شده از بک‌اند
+    // ۲. بارگذاری تعداد پیام‌ها و نوتیفیکیشن‌های خوانده‌نشده
     if (token.isNotEmpty) {
+      final counts = await ApiService.fetchNotificationCounts(token);
       final userData = await ApiService.getMe(token);
+
+      if (mounted) {
+        setState(() {
+          _unreadNotificationsCount = counts['unread_notifications'] ?? 0;
+          _unreadChatsCount = counts['unread_chats'] ?? 0;
+        });
+      }
+
       if (userData != null) {
         _email = userData['email'] ?? '';
         if (userData['profile'] != null) {
@@ -98,7 +111,14 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const ChatThreadsPage()),
-    );
+    ).then((_) => _loadDashboardData());
+  }
+
+  void _openNotifications() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const NotificationsPage()),
+    ).then((_) => _loadDashboardData());
   }
 
   Future<void> _logout() async {
@@ -226,13 +246,23 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
           ),
           const SizedBox(width: 16),
 
-          // آیکون چت بالای صفحه (قابل کلیک جهت باز کردن پیام‌ها)
-          IconButton(
-            icon: const Icon(Icons.chat_bubble_outline, color: Colors.black54, size: 22),
-            onPressed: _openChatThreads,
-            tooltip: 'پیام‌ها و گفتگوها',
+          // آیکون چت بالای صفحه
+          _buildTopBarIcon(
+            Icons.chat_bubble_outline,
+            hasBadge: _unreadChatsCount > 0,
+            badgeCount: _unreadChatsCount > 0 ? '$_unreadChatsCount' : '',
+            onTap: _openChatThreads,
           ),
           const SizedBox(width: 10),
+
+          // آیکون نوتیفیکیشن زنگوله
+          _buildTopBarIcon(
+            Icons.notifications_none,
+            hasBadge: _unreadNotificationsCount > 0,
+            badgeCount: _unreadNotificationsCount > 0 ? '$_unreadNotificationsCount' : '',
+            onTap: _openNotifications,
+          ),
+          const SizedBox(width: 16),
 
           // منوی پروفایل
           PopupMenuButton<String>(
@@ -272,6 +302,35 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTopBarIcon(IconData icon, {bool hasBadge = false, String badgeCount = '', VoidCallback? onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Padding(
+        padding: const EdgeInsets.all(4.0),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Icon(icon, color: Colors.black54, size: 22),
+            if (hasBadge)
+              Positioned(
+                top: -2,
+                right: -2,
+                child: CircleAvatar(
+                  radius: 7,
+                  backgroundColor: Colors.red,
+                  child: Text(
+                    badgeCount.isEmpty ? '●' : badgeCount,
+                    style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              )
+          ],
+        ),
       ),
     );
   }
@@ -489,7 +548,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     );
   }
 
-  // 🔴 متد جدید جایگزین شده: نمایش درخواست‌های اپلای‌شده دانشجو + باکس اطلاعات مصاحبه حضوری
+  // نمایش درخواست‌های اپلای‌شده دانشجو + باکس مصاحبه حضوری
   Widget _buildRecentRequestsSection({required bool isMobile}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -572,7 +631,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                     ],
                   ),
 
-                  // 📅 نمایش باکس سبز/آبی زمان و آدرس مصاحبه حضوری (در صورت دعوت شدن دانشجو)
+                  // 📅 نمایش باکس تاریخ و آدرس مصاحبه حضوری
                   if (isShortlisted && app['interview_date'] != null) ...[
                     const Divider(height: 20),
                     Container(
@@ -710,7 +769,8 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                 _buildNavItem(
                   Icons.chat_bubble_outline,
                   'پیام‌ها',
-                  onTap: _openChatThreads, // <--- اتصال پیام‌ها در سایدبار دانشجو
+                  badge: _unreadChatsCount > 0 ? '$_unreadChatsCount' : null, // عدد پیام‌های خوانده‌نشده
+                  onTap: _openChatThreads,
                 ),
                 _buildNavItem(Icons.settings_outlined, 'تنظیمات'),
                 _buildNavItem(
@@ -737,7 +797,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     );
   }
 
-  Widget _buildNavItem(IconData icon, String title, {bool isActive = false, VoidCallback? onTap}) {
+  Widget _buildNavItem(IconData icon, String title, {bool isActive = false, String? badge, VoidCallback? onTap}) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
       decoration: BoxDecoration(
@@ -747,6 +807,16 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
       child: ListTile(
         leading: Icon(icon, color: Colors.white, size: 20),
         title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 12)),
+        trailing: badge != null
+            ? Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: const Color(0xFF00E676),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(badge, style: const TextStyle(fontSize: 10, color: Colors.black, fontWeight: FontWeight.bold)),
+        )
+            : null,
         dense: true,
         onTap: onTap ?? () {},
       ),
@@ -765,11 +835,13 @@ class CompanyDashboardView extends StatefulWidget {
 }
 
 class _CompanyDashboardViewState extends State<CompanyDashboardView> {
+  int _unreadNotificationsCount = 0;
+  int _unreadChatsCount = 0;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   List<dynamic> _myProjects = [];
   bool _isLoadingMyProjects = true;
 
-  // متغیرهای ذخیره اطلاعات پروفایل شرکت
+  // اطلاعات کامل پروفایل شرکت
   String _companyName = 'شرکت فناوری';
   String _companyAbout = '';
   String _companyAddress = '';
@@ -786,12 +858,21 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token') ?? '';
 
-    // ۱. بارگذاری لیست پروژه‌های خود کارفرما
+    // ۱. دریافت پروژه‌های ثبت‌شده توسط کارفرما
     final projects = await ApiService.fetchMyProjects(token);
 
-    // ۲. بارگذاری اطلاعات پروفایل شرکت از بک‌اند
+    // ۲. بارگذاری اطلاعات کارفرما و تعداد پیام‌ها/اعلان‌ها
     if (token.isNotEmpty) {
+      final counts = await ApiService.fetchNotificationCounts(token);
       final userData = await ApiService.getMe(token);
+
+      if (mounted) {
+        setState(() {
+          _unreadNotificationsCount = counts['unread_notifications'] ?? 0;
+          _unreadChatsCount = counts['unread_chats'] ?? 0;
+        });
+      }
+
       if (userData != null && userData['company'] != null) {
         final c = userData['company'];
         _companyName = c['name'] ?? _companyName;
@@ -809,28 +890,34 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
     }
   }
 
-  // متد جدید: باز کردن صفحه ویرایش پروفایل شرکت
   void _openCompanyProfile() {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => const CompanyProfilePage(isWizard: false),
       ),
-    ).then((_) => _loadMyProjects()); // رفرش اطلاعات داشبورد پس از ویرایش
+    ).then((_) => _loadMyProjects());
   }
 
   void _openEmployerApplications() {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const EmployerApplicationsPage()),
-    );
+    ).then((_) => _loadMyProjects());
   }
 
   void _openChatThreads() {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const ChatThreadsPage()),
-    );
+    ).then((_) => _loadMyProjects());
+  }
+
+  void _openNotifications() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const NotificationsPage()),
+    ).then((_) => _loadMyProjects());
   }
 
   Future<void> _logout() async {
@@ -941,16 +1028,33 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E6AFB), foregroundColor: Colors.white),
           ),
           const SizedBox(width: 16),
-          IconButton(
-            icon: const Icon(Icons.chat_bubble_outline, color: Colors.black54, size: 22),
-            onPressed: _openChatThreads, // <--- چت کارفرما
+
+          // چت کارفرما با عدد پیام‌های جدید
+          _buildTopBarIcon(
+            Icons.chat_bubble_outline,
+            hasBadge: _unreadChatsCount > 0,
+            badgeCount: _unreadChatsCount > 0 ? '$_unreadChatsCount' : '',
+            onTap: _openChatThreads,
           ),
           const SizedBox(width: 10),
+
+          // آیکون زنگوله نوتیفیکیشن کارفرما
+          _buildTopBarIcon(
+            Icons.notifications_none,
+            hasBadge: _unreadNotificationsCount > 0,
+            badgeCount: _unreadNotificationsCount > 0 ? '$_unreadNotificationsCount' : '',
+            onTap: _openNotifications,
+          ),
+          const SizedBox(width: 16),
+
           PopupMenuButton<String>(
             onSelected: (value) {
+              if (value == 'profile') _openCompanyProfile();
               if (value == 'logout') _logout();
             },
             itemBuilder: (context) => [
+              const PopupMenuItem(value: 'profile', child: Text('ویرایش پروفایل شرکت')),
+              const PopupMenuDivider(),
               const PopupMenuItem(value: 'logout', child: Text('خروج از حساب', style: TextStyle(color: Colors.red))),
             ],
             child: CircleAvatar(
@@ -960,6 +1064,35 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTopBarIcon(IconData icon, {bool hasBadge = false, String badgeCount = '', VoidCallback? onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Padding(
+        padding: const EdgeInsets.all(4.0),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Icon(icon, color: Colors.black54, size: 22),
+            if (hasBadge)
+              Positioned(
+                top: -2,
+                right: -2,
+                child: CircleAvatar(
+                  radius: 7,
+                  backgroundColor: Colors.red,
+                  child: Text(
+                    badgeCount.isEmpty ? '●' : badgeCount,
+                    style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              )
+          ],
+        ),
       ),
     );
   }
@@ -976,20 +1109,27 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('استعدادهای نخبگان دانشگاهی را برای پروژه‌های خود جذب کنید', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+            Text('خوش آمدید $_companyName 👋', style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 6),
+            Text(
+              _companyAbout.isNotEmpty ? _companyAbout : 'استعدادهای نخبگان دانشگاهی را برای پروژه‌های خود جذب کنید.',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.5),
+            ),
             const SizedBox(height: 16),
             Row(
               children: [
                 ElevatedButton(
                   onPressed: () => _openCreateProjectModal(context),
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E676), foregroundColor: Colors.black87),
-                  child: const Text('تعریف پروژه جدید', style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: const Text('تعریف پروژه جدید', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
                 ),
                 const SizedBox(width: 12),
                 OutlinedButton(
                   onPressed: _openEmployerApplications,
                   style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white)),
-                  child: const Text('بررسی رزومه‌ها'),
+                  child: const Text('بررسی رزومه‌ها', style: TextStyle(fontSize: 11)),
                 ),
               ],
             ),
@@ -1039,7 +1179,7 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
       itemCount: _myProjects.length,
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: 340,
-        mainAxisExtent: 240,
+        mainAxisExtent: 255,
         crossAxisSpacing: 16,
         mainAxisSpacing: 16,
       ),
@@ -1055,7 +1195,7 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
 
     return Container(
       width: width,
-      height: 255, // افزایش ارتفاع جهت جاگیری مناسب دو دکمه بدون سرریز شدن
+      height: 255,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1108,10 +1248,9 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
             ),
           const SizedBox(height: 12),
 
-          // 🔘 دو دکمه اکشن برای کارفرما
+          // 🔘 دو دکمه اکشن کارفرما
           Row(
             children: [
-              // ۱. دکمه مشاهده جزئیات پروژه
               Expanded(
                 child: OutlinedButton(
                   onPressed: () {
@@ -1132,8 +1271,6 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
                 ),
               ),
               const SizedBox(width: 8),
-
-              // ۲. دکمه مشاهده رزومه‌ها و متقاضیان همین پروژه خاص
               Expanded(
                 child: ElevatedButton(
                   onPressed: () {
@@ -1179,12 +1316,17 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
               children: [
                 _buildNavItem(Icons.dashboard, 'داشبورد کارفرما', isActive: true),
                 _buildNavItem(Icons.add_box_outlined, 'ثبت پروژه جدید', onTap: () => _openCreateProjectModal(context)),
-                _buildNavItem(Icons.people_outline, 'مدیریت درخواست‌ها (رزومه‌ها)', onTap: _openEmployerApplications), // <--- اتصال سایدبار
-                _buildNavItem(Icons.chat_bubble_outline, 'پیام‌ها', onTap: _openChatThreads), // <--- چت
+                _buildNavItem(Icons.people_outline, 'مدیریت درخواست‌ها (رزومه‌ها)', onTap: _openEmployerApplications),
+                _buildNavItem(
+                  Icons.chat_bubble_outline,
+                  'پیام‌ها',
+                  badge: _unreadChatsCount > 0 ? '$_unreadChatsCount' : null, // <--- عدد پویای چت‌های جدید کارفرما
+                  onTap: _openChatThreads,
+                ),
                 _buildNavItem(
                   Icons.settings_outlined,
                   'پروفایل شرکت',
-                  onTap: _openCompanyProfile, // <--- اتصال دکمه
+                  onTap: _openCompanyProfile,
                 ),
                 _buildNavItem(
                   Icons.exit_to_app,
@@ -1210,7 +1352,7 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
     );
   }
 
-  Widget _buildNavItem(IconData icon, String title, {bool isActive = false, VoidCallback? onTap}) {
+  Widget _buildNavItem(IconData icon, String title, {bool isActive = false, String? badge, VoidCallback? onTap}) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
       decoration: BoxDecoration(
@@ -1220,6 +1362,16 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
       child: ListTile(
         leading: Icon(icon, color: Colors.white, size: 20),
         title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 12)),
+        trailing: badge != null
+            ? Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: const Color(0xFF00E676),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(badge, style: const TextStyle(fontSize: 10, color: Colors.black, fontWeight: FontWeight.bold)),
+        )
+            : null,
         dense: true,
         onTap: onTap ?? () {},
       ),

@@ -137,3 +137,13 @@ class ScheduleInterviewSchema(BaseModel):
 class SendMessageSchema(BaseModel):
     thread_id: UUID
     text: str
+
+class NotificationOut(BaseModel):
+    id: UUID
+    title: str
+    message: str
+    type: str
+    is_read: bool
+    created_at: datetime
+    class Config:
+        from_attributes = True

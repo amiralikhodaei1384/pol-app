@@ -153,3 +153,18 @@ class ChatMessage(Base):
     sender_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     text = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+# مدل جدول نوتیفیکیشن‌ها و اعلان‌ها
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False) # دریافت‌کننده نوتیفیکیشن
+    title = Column(String, nullable=False)                                      # عنوان
+    message = Column(Text, nullable=False)                                      # متن پیام
+    type = Column(String, default="general")                                    # "chat", "interview", "application"
+    link_id = Column(String, nullable=True)                                     # آیدی مربوطه جهت ارجاع
+    is_read = Column(Boolean, default=False)                                    # خوانده‌شده / نشده
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User")
