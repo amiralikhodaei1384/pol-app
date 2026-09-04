@@ -184,12 +184,24 @@ def get_all_projects(
                 continue
         match_score = calculate_match_score(student_profile, p) if student_profile else 75
         p_dict = {
-            "id": str(p.id), "title": p.title, "description": p.description, "required_skills": p.required_skills,
-            "deadline": str(p.deadline) if p.deadline else "نامشخص", # <--- خواندن مستقیم تاریخ شمسی, "project_type": p.project_type,
-            "city": getattr(p, 'city', 'تهران') or "تهران", "category": getattr(p, 'category', 'توسعه نرم‌افزار') or "توسعه نرم‌افزار",
-            "target_universities": p.target_universities or [], "target_majors": p.target_majors or [],
-            "requires_interview": p.requires_interview, "company_name": p.company.name if p.company else "شرکت فناوری",
-            "match_score": match_score, "is_applied": False
+            "id": str(p.id),
+            "title": p.title,
+            "description": p.description,
+            "required_skills": p.required_skills,
+            "deadline": str(p.deadline) if p.deadline else "نامشخص",
+            "project_type": p.project_type,
+            "city": getattr(p, 'city', 'تهران') or "تهران",
+            "category": getattr(p, 'category', 'توسعه نرم‌افزار') or "توسعه نرم‌افزار",
+            "target_universities": p.target_universities or [],
+            "target_majors": p.target_majors or [],
+            "requires_interview": p.requires_interview,
+            "company_name": p.company.name if p.company else "شرکت فناوری",
+            # 🏢 فیلدهای جدید درباره شرکت جهت ارسال به جزییات جابینجایی:
+            "company_about": p.company.about if (p.company and getattr(p.company, 'about', None)) else "توضیحاتی درباره معرفی این شرکت ثبت نشده است.",
+            "company_website": p.company.website if (p.company and getattr(p.company, 'website', None)) else "",
+            "company_address": p.company.address if (p.company and getattr(p.company, 'address', None)) else "",
+            "match_score": match_score,
+            "is_applied": False
         }
         if current_user.role == models.UserRole.STUDENT:
             app = db.query(models.Application).filter(models.Application.student_id == current_user.id, models.Application.project_id == p.id).first()
