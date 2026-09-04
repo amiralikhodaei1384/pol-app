@@ -226,13 +226,14 @@ class ApiService {
   }
 
   // ۸. دریافت پروژه‌ها با فیلترهای چندگانه (شامل فیلتر دانشگاه - اصلاح شد)
+  // دریافت پروژه‌ها با فیلترهای چندتایی (Multi-Select)
   static Future<List<dynamic>> fetchFilteredProjects({
     required String token,
     String? projectType,
-    String? city,
-    String? category,
-    String? relatedMajor,
-    String? university, // <--- پارامتر دانشگاه اضافه شد
+    List<String>? cities,
+    List<String>? categories,
+    List<String>? relatedMajors,
+    List<String>? universities,
     String? searchQuery,
   }) async {
     try {
@@ -240,11 +241,23 @@ class ApiService {
       Map<String, String> queryParams = {};
 
       if (projectType != null && projectType != "همه") queryParams['project_type'] = projectType;
-      if (city != null && city != "همه") queryParams['city'] = city;
-      if (category != null && category != "همه") queryParams['category'] = category;
-      if (relatedMajor != null && relatedMajor != "همه") queryParams['related_major'] = relatedMajor;
-      if (university != null && university != "همه") queryParams['university'] = university; // <--- ارسال پارامتر دانشگاه
-      if (searchQuery != null && searchQuery.isNotEmpty) queryParams['search'] = searchQuery;
+
+      // ارسال لیست‌ها به صورت متصل با کاما
+      if (cities != null && cities.isNotEmpty && !cities.contains("همه")) {
+        queryParams['cities'] = cities.join(",");
+      }
+      if (categories != null && categories.isNotEmpty && !categories.contains("همه")) {
+        queryParams['categories'] = categories.join(",");
+      }
+      if (relatedMajors != null && relatedMajors.isNotEmpty && !relatedMajors.contains("همه")) {
+        queryParams['majors'] = relatedMajors.join(",");
+      }
+      if (universities != null && universities.isNotEmpty && !universities.contains("همه")) {
+        queryParams['universities'] = universities.join(",");
+      }
+      if (searchQuery != null && searchQuery.isNotEmpty) {
+        queryParams['search'] = searchQuery;
+      }
 
       uri = uri.replace(queryParameters: queryParams);
 
@@ -255,8 +268,6 @@ class ApiService {
 
       if (res.statusCode == 200) {
         return jsonDecode(res.body);
-      } else {
-        print("خطا در فیلتر پروژه‌ها (کد ${res.statusCode}): ${res.body}");
       }
     } catch (e) {
       print("خطا در جستجوی پروژه‌ها: $e");

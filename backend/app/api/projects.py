@@ -171,28 +171,57 @@ def get_company_applications(
     return res
 
 # ۶. لیست کل پروژه‌ها با فیلترها
+# ۱. دریافت پروژه‌ها با فیلترهای چندتایی (Multi-Select)
 @router.get("/")
 def get_all_projects(
-        project_type: Optional[str] = None, city: Optional[str] = None, category: Optional[str] = None,
-        related_major: Optional[str] = None, university: Optional[str] = None, search: Optional[str] = None,
-        db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
+        project_type: Optional[str] = None,
+        cities: Optional[str] = None,        # لیست شهرها جداشده با کاما: "تهران,اصفهان"
+        categories: Optional[str] = None,    # لیست دسته‌بندی‌ها: "توسعه نرم‌افزار,طراحی UI/UX"
+        majors: Optional[str] = None,        # لیست رشته‌ها: "مهندسی کامپیوتر,علوم کامپیوتر"
+        universities: Optional[str] = None,  # لیست دانشگاه‌ها: "دانشگاه تهران,دانشگاه شریف"
+        search: Optional[str] = None,
+        db: Session = Depends(get_db),
+        current_user: models.User = Depends(get_current_user)
 ):
     query = db.query(models.Project).filter(models.Project.is_active == True)
-    if project_type and project_type != "همه": query = query.filter(models.Project.project_type == project_type)
-    if city and city != "همه": query = query.filter(models.Project.city == city)
-    if category and category != "همه": query = query.filter(models.Project.category == category)
+
+    if project_type and project_type != "همه":
+        query = query.filter(models.Project.project_type == project_type)
+
+    # تبدیل رشته‌های کامادار به لیست در پایتون
+    city_list = [c.strip() for c in cities.split(",")] if cities else []
+    cat_list = [c.strip() for c in categories.split(",")] if categories else []
+    major_list = [m.strip() for m in majors.split(",")] if majors else []
+    univ_list = [u.strip() for u in universities.split(",")] if universities else []
+
+    if city_list and "همه" not in city_list:
+        query = query.filter(models.Project.city.in_(city_list))
+
+    if cat_list and "همه" not in cat_list:
+        query = query.filter(models.Project.category.in_(cat_list))
+
     if search and search.strip():
         sf = f"%{search.strip()}%"
         query = query.filter((models.Project.title.ilike(sf)) | (models.Project.description.ilike(sf)))
 
     projects = query.order_by(models.Project.created_at.desc()).all()
+
     student_profile = db.query(models.StudentProfile).filter(models.StudentProfile.user_id == current_user.id).first() if current_user.role == models.UserRole.STUDENT else None
 
     result = []
     for p in projects:
-        if university and university != "همه":
-            if p.target_universities and university not in p.target_universities:
+        # فیلتر چندتایی دانشگاه‌های مورد قبول کارفرما
+        if univ_list and "همه" not in univ_list:
+            p_target_univs = p.target_universities or []
+            if p_target_univs and not any(u in p_target_univs for u in univ_list):
                 continue
+
+        # فیلتر چندتایی رشته‌های تحصیلی مرتبط
+        if major_list and "همه" not in major_list:
+            p_target_majors = p.target_majors or []
+            if p_target_majors and not any(m in p_target_majors for m in major_list):
+                continue
+
         match_score = calculate_match_score(student_profile, p) if student_profile else 75
         p_dict = {
             "id": str(p.id),
@@ -207,17 +236,23 @@ def get_all_projects(
             "target_majors": p.target_majors or [],
             "requires_interview": p.requires_interview,
             "company_name": p.company.name if p.company else "شرکت فناوری",
-            # 🏢 فیلدهای جدید درباره شرکت جهت ارسال به جزییات جابینجایی:
-            "company_about": p.company.about if (p.company and getattr(p.company, 'about', None)) else "توضیحاتی درباره معرفی این شرکت ثبت نشده است.",
+            "company_about": p.company.about if (p.company and getattr(p.company, 'about', None)) else "",
             "company_website": p.company.website if (p.company and getattr(p.company, 'website', None)) else "",
             "company_address": p.company.address if (p.company and getattr(p.company, 'address', None)) else "",
             "match_score": match_score,
             "is_applied": False
         }
+
         if current_user.role == models.UserRole.STUDENT:
-            app = db.query(models.Application).filter(models.Application.student_id == current_user.id, models.Application.project_id == p.id).first()
-            if app: p_dict["is_applied"] = True
+            app = db.query(models.Application).filter(
+                models.Application.student_id == current_user.id,
+                models.Application.project_id == p.id
+            ).first()
+            if app:
+                p_dict["is_applied"] = True
+
         result.append(p_dict)
+
     return result
 
 # ۷. ثبت پروژه جدید کارفرما
