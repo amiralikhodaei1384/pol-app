@@ -8,7 +8,7 @@ import 'package:pol_app/employer_applications_page.dart';
 import 'package:pol_app/chat_threads_page.dart'; // <--- صفحه جدید لیست چت‌ها
 import 'package:shared_preferences/shared_preferences.dart';
 import 'login_page.dart';
-
+import 'company_profile_page.dart';
 class DashboardPage extends StatefulWidget {
   final bool isCompany;
 
@@ -769,6 +769,12 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
   List<dynamic> _myProjects = [];
   bool _isLoadingMyProjects = true;
 
+  // متغیرهای ذخیره اطلاعات پروفایل شرکت
+  String _companyName = 'شرکت فناوری';
+  String _companyAbout = '';
+  String _companyAddress = '';
+  String _companyWebsite = '';
+
   @override
   void initState() {
     super.initState();
@@ -779,7 +785,21 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
     setState(() => _isLoadingMyProjects = true);
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token') ?? '';
+
+    // ۱. بارگذاری لیست پروژه‌های خود کارفرما
     final projects = await ApiService.fetchMyProjects(token);
+
+    // ۲. بارگذاری اطلاعات پروفایل شرکت از بک‌اند
+    if (token.isNotEmpty) {
+      final userData = await ApiService.getMe(token);
+      if (userData != null && userData['company'] != null) {
+        final c = userData['company'];
+        _companyName = c['name'] ?? _companyName;
+        _companyAbout = c['about'] ?? '';
+        _companyAddress = c['address'] ?? '';
+        _companyWebsite = c['website'] ?? '';
+      }
+    }
 
     if (mounted) {
       setState(() {
@@ -787,6 +807,16 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
         _isLoadingMyProjects = false;
       });
     }
+  }
+
+  // متد جدید: باز کردن صفحه ویرایش پروفایل شرکت
+  void _openCompanyProfile() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const CompanyProfilePage(isWizard: false),
+      ),
+    ).then((_) => _loadMyProjects()); // رفرش اطلاعات داشبورد پس از ویرایش
   }
 
   void _openEmployerApplications() {
@@ -1117,6 +1147,11 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
                 _buildNavItem(Icons.add_box_outlined, 'ثبت پروژه جدید', onTap: () => _openCreateProjectModal(context)),
                 _buildNavItem(Icons.people_outline, 'مدیریت درخواست‌ها (رزومه‌ها)', onTap: _openEmployerApplications), // <--- اتصال سایدبار
                 _buildNavItem(Icons.chat_bubble_outline, 'پیام‌ها', onTap: _openChatThreads), // <--- چت
+                _buildNavItem(
+                  Icons.settings_outlined,
+                  'پروفایل شرکت',
+                  onTap: _openCompanyProfile, // <--- اتصال دکمه
+                ),
                 _buildNavItem(
                   Icons.exit_to_app,
                   'خروج از حساب',

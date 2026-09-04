@@ -6,7 +6,7 @@ import 'student_profile_builder_page.dart'; // <--- صفحه پروفایل‌س
 import 'api_service.dart';
 import 'widgets/rotating_border.dart';
 import 'background.dart';
-
+import 'company_profile_page.dart';
 class RegistrationPage extends StatefulWidget {
   const RegistrationPage({super.key});
 
@@ -113,7 +113,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
               // 🏢 اگر شرکت است -> هدایت به داشبورد کارفرما
               Navigator.pushAndRemoveUntil(
                 context,
-                MaterialPageRoute(builder: (context) => const DashboardPage(isCompany: true)),
+                MaterialPageRoute(builder: (context) => const CompanyProfilePage(isWizard: true)),
                     (route) => false,
               );
             }
