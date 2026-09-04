@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:pol_app/api_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'employer_applications_page.dart';
+
 class ProjectDetailsPage extends StatefulWidget {
   final dynamic project;
   final bool isCompany; // تعیین نقش کاربر (دانشجو یا کارفرما)
@@ -371,34 +373,49 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
         ),
 
         // دکمه ثابت پایین صفحه
-        bottomNavigationBar: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -2))],
-          ),
-          child: SizedBox(
-            height: 48,
-            child: widget.isCompany
-                ? Container(
-              alignment: Alignment.center,
-              decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(12)),
-              child: const Text('این فرصت شغلی توسط شما منتشر شده است', style: TextStyle(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.bold)),
-            )
-                : ElevatedButton(
-              onPressed: _isApplied ? null : _showApplyDialog,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _isApplied ? Colors.grey : const Color(0xFF10B981),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              child: Text(
-                _isApplied ? 'درخواست ارسال شده است' : 'ارسال درخواست و رزومه (اپلای)',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+          bottomNavigationBar: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -2))],
+            ),
+            child: SizedBox(
+              height: 48,
+              child: widget.isCompany
+                  ? ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => EmployerApplicationsPage(
+                        projectId: widget.project['id'].toString(),
+                        projectTitle: widget.project['title'],
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.people, size: 18),
+                label: const Text('مشاهده متقاضیان و رزومه‌های این پروژه', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B981),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              )
+                  : ElevatedButton(
+                onPressed: _isApplied ? null : _showApplyDialog,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _isApplied ? Colors.grey : const Color(0xFF10B981),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: Text(
+                  _isApplied ? 'درخواست ارسال شده است' : 'ارسال درخواست و رزومه (اپلای)',
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                ),
               ),
             ),
-          ),
-        ),
+          )
       ),
     );
   }

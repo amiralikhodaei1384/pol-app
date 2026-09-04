@@ -5,7 +5,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class EmployerApplicationsPage extends StatefulWidget {
-  const EmployerApplicationsPage({super.key});
+  final String? projectId;    // اگر متقاضیان یک پروژه خاص مد نظر باشد
+  final String? projectTitle; // عنوان پروژه جهت نمایش در هدر
+
+  const EmployerApplicationsPage({
+    super.key,
+    this.projectId,
+    this.projectTitle,
+  });
 
   @override
   State<EmployerApplicationsPage> createState() => _EmployerApplicationsPageState();
@@ -25,11 +32,12 @@ class _EmployerApplicationsPageState extends State<EmployerApplicationsPage> {
     setState(() => _isLoading = true);
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token') ?? '';
-    final list = await ApiService.fetchCompanyApplications(token);
+
+    // ارسال آیدی پروژه در صورت وجود
+    final list = await ApiService.fetchCompanyApplications(token, projectId: widget.projectId);
     if (mounted) setState(() { _applications = list; _isLoading = false; });
   }
 
-  // باز کردن رزومه PDF دانشجو در مرورگر/نمایشگر
   void _openResumePdf(String? resumePath) async {
     if (resumePath == null || resumePath.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -49,7 +57,6 @@ class _EmployerApplicationsPageState extends State<EmployerApplicationsPage> {
     }
   }
 
-  // مشاهده کامل مشخصات و سوابق تحصیلی/کاری دانشجو
   void _showStudentDetailsModal(dynamic app) {
     final educations = (app['student_educations'] as List<dynamic>?) ?? [];
     final workExp = (app['student_work_experiences'] as List<dynamic>?) ?? [];
@@ -79,7 +86,6 @@ class _EmployerApplicationsPageState extends State<EmployerApplicationsPage> {
                   Text('شماره تماس: ${app['student_phone'] ?? "ثبت نشده"}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
                   const Divider(height: 24),
 
-                  // سوابق تحصیلی
                   const Text('🎓 سوابق تحصیلی:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E6AFB))),
                   const SizedBox(height: 8),
                   if (educations.isEmpty)
@@ -94,7 +100,6 @@ class _EmployerApplicationsPageState extends State<EmployerApplicationsPage> {
 
                   const SizedBox(height: 16),
 
-                  // سوابق کاری
                   const Text('💼 سوابق شغلی و کاری:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF10B981))),
                   const SizedBox(height: 8),
                   if (workExp.isEmpty)
@@ -109,7 +114,6 @@ class _EmployerApplicationsPageState extends State<EmployerApplicationsPage> {
 
                   const SizedBox(height: 16),
 
-                  // مهارت‌ها
                   const Text('🛠️ مهارت‌های تخصصی:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                   const SizedBox(height: 8),
                   Wrap(
@@ -137,7 +141,6 @@ class _EmployerApplicationsPageState extends State<EmployerApplicationsPage> {
     );
   }
 
-  // دیالوگ انتخاب تاریخ شمسی (Jalali Date Picker) جهت دعوت به مصاحبه حضوری
   void _showScheduleModal(String appId) {
     String selectedYear = '1405';
     String selectedMonth = '04';
@@ -174,8 +177,6 @@ class _EmployerApplicationsPageState extends State<EmployerApplicationsPage> {
                   children: [
                     const Text('انتخاب تاریخ شمسی مصاحبه:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
                     const SizedBox(height: 8),
-
-                    // انتخابگر روز/ماه/سال شمسی
                     Row(
                       children: [
                         Expanded(
@@ -207,8 +208,6 @@ class _EmployerApplicationsPageState extends State<EmployerApplicationsPage> {
                       ],
                     ),
                     const SizedBox(height: 12),
-
-                    // انتخاب ساعت
                     DropdownButtonFormField<String>(
                       value: selectedTime,
                       decoration: const InputDecoration(labelText: 'ساعت مصاحبه'),
@@ -216,7 +215,6 @@ class _EmployerApplicationsPageState extends State<EmployerApplicationsPage> {
                       onChanged: (v) => setModalState(() => selectedTime = v!),
                     ),
                     const SizedBox(height: 12),
-
                     TextField(controller: addressCtrl, decoration: const InputDecoration(labelText: 'آدرس محل مراجعه حضوری')),
                     const SizedBox(height: 12),
                     TextField(controller: noteCtrl, decoration: const InputDecoration(labelText: 'توضیحات همراه (اختیاری)')),
@@ -235,7 +233,7 @@ class _EmployerApplicationsPageState extends State<EmployerApplicationsPage> {
                     if (ok && mounted) {
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('دعوت به مصاحبه حضوری با تاریخ شمسی برای دانشجو ارسال شد.'), backgroundColor: Color(0xFF10B981)),
+                        const SnackBar(content: Text('دعوت به مصاحبه حضوری برای دانشجو ارسال شد.'), backgroundColor: Color(0xFF10B981)),
                       );
                       _loadApplications();
                     }
@@ -262,12 +260,16 @@ class _EmployerApplicationsPageState extends State<EmployerApplicationsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final pageTitle = widget.projectTitle != null
+        ? 'متقاضیان پروژه: ${widget.projectTitle}'
+        : 'مدیریت درخواست‌ها و رزومه‌ها';
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: const Color(0xFFF8FAFC),
         appBar: AppBar(
-          title: const Text('مدیریت درخواست‌ها و رزومه‌ها', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          title: Text(pageTitle, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
           centerTitle: true,
           elevation: 0,
           backgroundColor: Colors.white,
@@ -275,6 +277,10 @@ class _EmployerApplicationsPageState extends State<EmployerApplicationsPage> {
         ),
         body: _isLoading
             ? const Center(child: CircularProgressIndicator(color: Color(0xFF1E6AFB)))
+            : _applications.isEmpty
+            ? const Center(
+          child: Text('هنوز هیچ درخواستی برای این پروژه ارسال نشده است.', style: TextStyle(color: Colors.grey, fontSize: 12)),
+        )
             : ListView.builder(
           padding: const EdgeInsets.all(16),
           itemCount: _applications.length,
@@ -302,39 +308,33 @@ class _EmployerApplicationsPageState extends State<EmployerApplicationsPage> {
                         )
                       ],
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
+                    Text('برای پروژه: ${app['project_title']}', style: const TextStyle(color: Color(0xFF1E6AFB), fontSize: 11, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 2),
                     Text('${app['student_university']} • ${app['student_major']}', style: const TextStyle(color: Colors.grey, fontSize: 11)),
                     const SizedBox(height: 12),
 
-                    // دکمه‌های اکشن بررسی رزومه و اقدامات
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        // ۱. دکمه مشاهده رزومه PDF
                         ElevatedButton.icon(
                           onPressed: () => _openResumePdf(app['student_resume']),
                           icon: const Icon(Icons.picture_as_pdf, size: 14),
                           label: const Text('مشاهده رزومه PDF', style: TextStyle(fontSize: 10)),
                           style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E6AFB), foregroundColor: Colors.white),
                         ),
-
-                        // ۲. دکمه مشاهده کامل مشخصات
                         OutlinedButton.icon(
                           onPressed: () => _showStudentDetailsModal(app),
                           icon: const Icon(Icons.person_search, size: 14),
                           label: const Text('مشاهده سوابق دانشجو', style: TextStyle(fontSize: 10)),
                         ),
-
-                        // ۳. دکمه دعوت به مصاحبه حضوری
                         ElevatedButton.icon(
                           onPressed: () => _showScheduleModal(app['application_id']),
                           icon: const Icon(Icons.event_available, size: 14),
                           label: Text(isShortlisted ? 'ویرایش مصاحبه' : 'دعوت به مصاحبه حضوری', style: const TextStyle(fontSize: 10)),
                           style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981), foregroundColor: Colors.white),
                         ),
-
-                        // ۴. دکمه شروع چت
                         OutlinedButton.icon(
                           onPressed: () => _openChat(app['application_id']),
                           icon: const Icon(Icons.chat, size: 14),

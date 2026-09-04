@@ -331,10 +331,16 @@ class ApiService {
   }
 
   // ۱۳. دریافت بورد درخواست‌ها و رزومه‌های دریافت‌شده برای کارفرما
-  static Future<List<dynamic>> fetchCompanyApplications(String token) async {
+  // دریافت بورد رزومه‌ها و متقاضیان (با امکان دریافت آیدی پروژه خاص)
+  static Future<List<dynamic>> fetchCompanyApplications(String token, {String? projectId}) async {
     try {
+      var uri = Uri.parse("$baseUrl/projects/company-applications");
+      if (projectId != null && projectId.isNotEmpty) {
+        uri = uri.replace(queryParameters: {'project_id': projectId});
+      }
+
       final res = await http.get(
-        Uri.parse("$baseUrl/projects/company-applications"),
+        uri,
         headers: {"Authorization": "Bearer $token"},
       ).timeout(const Duration(seconds: 5));
 

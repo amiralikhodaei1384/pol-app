@@ -121,8 +121,13 @@ def get_my_applications(db: Session = Depends(get_db), current_user: models.User
     return result
 # ۵. بورد مدیریت رزومه‌ها و متقاضیان برای کارفرما
 # بورد رزومه‌ها و متقاضیان دریافت شده برای کارفرما
+# بورد رزومه‌ها و متقاضیان دریافت شده برای کارفرما (با قابلیت فیلتر بر اساس یک پروژه خاص)
 @router.get("/company-applications")
-def get_company_applications(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+def get_company_applications(
+        project_id: Optional[str] = None, # <--- فیلتر اختیاری بر اساس پروژه
+        db: Session = Depends(get_db),
+        current_user: models.User = Depends(get_current_user)
+):
     if current_user.role != models.UserRole.COMPANY_REP or not current_user.company_rep_profile:
         raise HTTPException(status_code=403, detail="دسترسی غیرمجاز")
 
@@ -130,7 +135,13 @@ def get_company_applications(db: Session = Depends(get_db), current_user: models
     company_projects = db.query(models.Project).filter(models.Project.company_id == company_id).all()
     project_ids = [p.id for p in company_projects]
 
-    apps = db.query(models.Application).filter(models.Application.project_id.in_(project_ids)).order_by(models.Application.created_at.desc()).all()
+    query = db.query(models.Application).filter(models.Application.project_id.in_(project_ids))
+
+    # اگر آیدی پروژه ارسال شده باشد، فقط متقاضیان همان پروژه فیلتر می‌شوند
+    if project_id and project_id.strip():
+        query = query.filter(models.Application.project_id == project_id)
+
+    apps = query.order_by(models.Application.created_at.desc()).all()
     res = []
     for a in apps:
         student_user = db.query(models.User).filter(models.User.id == a.student_id).first()
@@ -148,7 +159,7 @@ def get_company_applications(db: Session = Depends(get_db), current_user: models
             "student_educations": sp.educations if sp else [],
             "student_work_experiences": sp.work_experiences if sp else [],
             "student_courses": sp.courses if sp else [],
-            "student_resume": sp.resume_file if sp else None, # آدرس فایل PDF رزومه
+            "student_resume": sp.resume_file if sp else None,
             "match_score": calculate_match_score(sp, a.project) if (sp and a.project) else 75,
             "status": a.status.value if hasattr(a.status, 'value') else str(a.status),
             "interview_date": a.interview_date,

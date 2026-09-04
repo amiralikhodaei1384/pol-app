@@ -1055,7 +1055,7 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
 
     return Container(
       width: width,
-      height: 240,
+      height: 255, // افزایش ارتفاع جهت جاگیری مناسب دو دکمه بدون سرریز شدن
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1107,24 +1107,58 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
               }).toList(),
             ),
           const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            height: 34,
-            child: OutlinedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ProjectDetailsPage(project: item, isCompany: true),
+
+          // 🔘 دو دکمه اکشن برای کارفرما
+          Row(
+            children: [
+              // ۱. دکمه مشاهده جزئیات پروژه
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ProjectDetailsPage(project: item, isCompany: true),
+                      ),
+                    );
+                  },
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFF1E6AFB)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    minimumSize: const Size(0, 34),
                   ),
-                );
-              },
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Color(0xFF1E6AFB)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  child: const Text('جزئیات پروژه', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF1E6AFB))),
+                ),
               ),
-              child: const Text('مشاهده جزئیات پروژه', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF1E6AFB))),
-            ),
+              const SizedBox(width: 8),
+
+              // ۲. دکمه مشاهده رزومه‌ها و متقاضیان همین پروژه خاص
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => EmployerApplicationsPage(
+                          projectId: item['id'].toString(),
+                          projectTitle: item['title'],
+                        ),
+                      ),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF10B981),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    minimumSize: const Size(0, 34),
+                  ),
+                  child: const Text('متقاضیان پروژه', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
           ),
         ],
       ),
