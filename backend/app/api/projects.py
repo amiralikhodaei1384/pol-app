@@ -470,3 +470,64 @@ def get_notifications(db: Session = Depends(get_db), current_user: models.User =
 
     db.commit()
     return res
+
+
+# ۱. حذف اعلان توسط کاربر
+@router.delete("/notifications/{notification_id}")
+def delete_notification(
+        notification_id: str,
+        db: Session = Depends(get_db),
+        current_user: models.User = Depends(get_current_user)
+):
+    notif = db.query(models.Notification).filter(
+        models.Notification.id == notification_id,
+        models.Notification.user_id == current_user.id
+    ).first()
+
+    if notif:
+        db.delete(notif)
+        db.commit()
+
+    return {"message": "اعلان با موفقیت حذف شد."}
+
+# ۲. حذف پیام چت (فقط توسط فرستنده پیام)
+@router.delete("/chat/messages/{message_id}")
+def delete_chat_message(
+        message_id: str,
+        db: Session = Depends(get_db),
+        current_user: models.User = Depends(get_current_user)
+):
+    msg = db.query(models.ChatMessage).filter(models.ChatMessage.id == message_id).first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="پیام یافت نشد.")
+
+    # فیلتر امنیتی: تنها فرستنده پیام مجاز به حذف آن است
+    if str(msg.sender_id) != str(current_user.id):
+        raise HTTPException(status_code=403, detail="شما تنها مجاز به حذف پیام‌های خود هستید.")
+
+    db.delete(msg)
+    db.commit()
+    return {"message": "پیام با موفقیت حذف شد."}
+
+# ۳. حذف پروژه توسط کارفرما (حتماً باید انتهای فایل قرار گیرد)
+@router.delete("/{project_id}")
+def delete_project(
+        project_id: str,
+        db: Session = Depends(get_db),
+        current_user: models.User = Depends(get_current_user)
+):
+    if current_user.role != models.UserRole.COMPANY_REP or not current_user.company_rep_profile:
+        raise HTTPException(status_code=403, detail="تنها کارفرما مجاز به حذف پروژه است.")
+
+    company_id = current_user.company_rep_profile.company_id
+    project = db.query(models.Project).filter(
+        models.Project.id == project_id,
+        models.Project.company_id == company_id
+    ).first()
+
+    if not project:
+        raise HTTPException(status_code=404, detail="پروژه یافت نشد یا شما دسترسی حذف آن را ندارید.")
+
+    db.delete(project)
+    db.commit()
+    return {"message": "پروژه با موفقیت حذف شد."}

@@ -1188,119 +1188,168 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
       },
     );
   }
-
+  void _confirmDeleteProject(String projectId) {
+    showDialog(
+      context: context,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.delete_forever, color: Colors.redAccent),
+              SizedBox(width: 8),
+              Text('حذف پروژه', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: const Text('آیا از حذف این پروژه اطمینان دارید؟ تمام درخواست‌ها و اطلاعات مرتبط پاک خواهد شد.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('انصراف', style: TextStyle(color: Colors.grey))),
+            ElevatedButton(
+              onPressed: () async {
+                final prefs = await SharedPreferences.getInstance();
+                final token = prefs.getString('access_token') ?? '';
+                final ok = await ApiService.deleteProject(token, projectId);
+                if (ok && mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('پروژه با موفقیت حذف شد.'), backgroundColor: Colors.redAccent),
+                  );
+                  _loadMyProjects();
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
+              child: const Text('حذف پروژه'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
   Widget _buildCompanyProjectCard(dynamic item, {double? width}) {
     final deadline = item['deadline'] != null ? item['deadline'].toString().split('T')[0] : 'نامشخص';
     final skills = (item['required_skills'] as List<dynamic>?)?.cast<String>() ?? [];
 
     return Container(
-      width: width,
-      height: 255,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 2)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: const Color(0xFFE3F2FD), borderRadius: BorderRadius.circular(6)),
-                child: Text(item['project_type'] ?? 'پروژه', style: const TextStyle(color: Color(0xFF1976D2), fontSize: 10, fontWeight: FontWeight.bold)),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(color: item['is_active'] == true ? const Color(0xFFE8F5E9) : const Color(0xFFFFF3E0), borderRadius: BorderRadius.circular(4)),
-                child: Text(item['is_active'] == true ? 'فعال' : 'غیرفعال', style: TextStyle(color: item['is_active'] == true ? Colors.green : Colors.orange, fontSize: 9, fontWeight: FontWeight.bold)),
-              )
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(item['title'] ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, height: 1.4)),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              const Icon(Icons.timer_outlined, size: 12, color: Colors.grey),
-              const SizedBox(width: 4),
-              Text('مهلت: $deadline', style: const TextStyle(fontSize: 10, color: Colors.grey)),
-            ],
-          ),
-          const Spacer(),
-          if (skills.isNotEmpty)
-            Wrap(
-              spacing: 6,
-              runSpacing: 4,
-              children: skills.take(3).map((skill) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(4), border: Border.all(color: const Color(0xFFE2E8F0))),
-                  child: Text(skill, style: const TextStyle(fontSize: 9, color: Colors.black87)),
-                );
-              }).toList(),
+        width: width,
+        height: 255,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 2)),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(color: const Color(0xFFE3F2FD), borderRadius: BorderRadius.circular(6)),
+                  child: Text(item['project_type'] ?? 'پروژه', style: const TextStyle(color: Color(0xFF1976D2), fontSize: 10, fontWeight: FontWeight.bold)),
+                ),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(color: item['is_active'] == true ? const Color(0xFFE8F5E9) : const Color(0xFFFFF3E0), borderRadius: BorderRadius.circular(4)),
+                      child: Text(item['is_active'] == true ? 'فعال' : 'غیرفعال', style: TextStyle(color: item['is_active'] == true ? Colors.green : Colors.orange, fontSize: 9, fontWeight: FontWeight.bold)),
+                    ),
+                    const SizedBox(width: 4),
+                    // 🗑️ آیکون حذف پروژه توسط کارفرما
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () => _confirmDeleteProject(item['id'].toString()),
+                      tooltip: 'حذف پروژه',
+                    ),
+                  ],
+                )
+              ],
             ),
-          const SizedBox(height: 12),
+            const SizedBox(height: 12),
+            Text(item['title'] ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, height: 1.4)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.timer_outlined, size: 12, color: Colors.grey),
+                const SizedBox(width: 4),
+                Text('مهلت: $deadline', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+              ],
+            ),
+            const Spacer(),
+            if (skills.isNotEmpty)
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: skills.take(3).map((skill) {
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(4), border: Border.all(color: const Color(0xFFE2E8F0))),
+                    child: Text(skill, style: const TextStyle(fontSize: 9, color: Colors.black87)),
+                  );
+                }).toList(),
+              ),
+            const SizedBox(height: 12),
 
-          // 🔘 دو دکمه اکشن کارفرما
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ProjectDetailsPage(project: item, isCompany: true),
-                      ),
-                    );
-                  },
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFF1E6AFB)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    minimumSize: const Size(0, 34),
-                  ),
-                  child: const Text('جزئیات پروژه', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF1E6AFB))),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => EmployerApplicationsPage(
-                          projectId: item['id'].toString(),
-                          projectTitle: item['title'],
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ProjectDetailsPage(project: item, isCompany: true),
                         ),
-                      ),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF10B981),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    minimumSize: const Size(0, 34),
+                      );
+                    },
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFF1E6AFB)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      minimumSize: const Size(0, 34),
+                    ),
+                    child: const Text('جزئیات پروژه', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF1E6AFB))),
                   ),
-                  child: const Text('متقاضیان پروژه', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
                 ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => EmployerApplicationsPage(
+                            projectId: item['id'].toString(),
+                            projectTitle: item['title'],
+                          ),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF10B981),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      minimumSize: const Size(0, 34),
+                    ),
+                    child: const Text('متقاضیان پروژه', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
 
   Widget _buildSidebarContent(BuildContext context) {
     return Container(

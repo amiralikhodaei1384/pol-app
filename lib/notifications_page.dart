@@ -36,7 +36,14 @@ class _NotificationsPageState extends State<NotificationsPage> {
       });
     }
   }
-
+  Future<void> _deleteNotif(String notifId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('access_token') ?? '';
+    final ok = await ApiService.deleteNotification(token, notifId);
+    if (ok) {
+      _loadNotifications(); // رفرش لیست نوتیفیکیشن‌ها
+    }
+  }
   // 🔗 موتور کلیک و انتقال هوشمند به صفحه مربوطه (Deep Linking)
   void _handleNotificationTap(dynamic notif) {
     final type = notif['type'] ?? 'general';
@@ -168,7 +175,19 @@ class _NotificationsPageState extends State<NotificationsPage> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(notif['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B))),
-                                Text(notif['created_at'] ?? '', style: const TextStyle(fontSize: 9, color: Colors.grey)),
+                                Row(
+                                  children: [
+                                    Text(notif['created_at'] ?? '', style: const TextStyle(fontSize: 9, color: Colors.grey)),
+                                    const SizedBox(width: 4),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline, size: 16, color: Colors.redAccent),
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      onPressed: () => _deleteNotif(notif['id'].toString()),
+                                      tooltip: 'حذف اعلان',
+                                    ),
+                                  ],
+                                ),
                               ],
                             ),
                             const SizedBox(height: 6),

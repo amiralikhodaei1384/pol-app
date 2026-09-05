@@ -521,6 +521,49 @@ class ApiService {
     return null;
   }
 
+  // حذف پروژه توسط کارفرما
+  static Future<bool> deleteProject(String token, String projectId) async {
+    try {
+      final res = await http.delete(
+        Uri.parse("$baseUrl/projects/$projectId"),
+        headers: {"Authorization": "Bearer $token"},
+      ).timeout(const Duration(seconds: 5));
 
+      return res.statusCode == 200;
+    } catch (e) {
+      print("خطا در حذف پروژه: $e");
+      return false;
+    }
+  }
+
+// حذف پیام چت توسط فرستنده
+  static Future<bool> deleteChatMessage(String token, String messageId) async {
+    try {
+      final res = await http.delete(
+        Uri.parse("$baseUrl/projects/chat/messages/$messageId"),
+        headers: {"Authorization": "Bearer $token"},
+      ).timeout(const Duration(seconds: 5));
+
+      return res.statusCode == 200;
+    } catch (e) {
+      print("خطا در حذف پیام چت: $e");
+      return false;
+    }
+  }
+
+// حذف اعلان/نوتیفیکیشن
+  static Future<bool> deleteNotification(String token, String notificationId) async {
+    try {
+      final res = await http.delete(
+        Uri.parse("$baseUrl/projects/notifications/$notificationId"),
+        headers: {"Authorization": "Bearer $token"},
+      ).timeout(const Duration(seconds: 5));
+
+      return res.statusCode == 200;
+    } catch (e) {
+      print("خطا در حذف اعلان: $e");
+      return false;
+    }
+  }
 
 }
