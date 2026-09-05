@@ -1,6 +1,10 @@
+import 'dart:io' show File;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:pol_app/api_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ChatPage extends StatefulWidget {
   final String threadId;
@@ -13,6 +17,7 @@ class ChatPage extends StatefulWidget {
 class _ChatPageState extends State<ChatPage> {
   List<dynamic> _messages = [];
   final _msgController = TextEditingController();
+  bool _isUploadingFile = false;
 
   @override
   void initState() {
@@ -27,7 +32,65 @@ class _ChatPageState extends State<ChatPage> {
     if (mounted) setState(() => _messages = list);
   }
 
-  Future<void> _send() async {
+  // 📎 انتخاب فایل از سیستم و ارسال مستقیم در چت
+  Future<void> _pickAndSendFile() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+        withData: true,
+      );
+
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        List<int>? fileBytes = file.bytes;
+
+        if (fileBytes == null && !kIsWeb && file.path != null) {
+          fileBytes = await File(file.path!).readAsBytes();
+        }
+
+        if (fileBytes != null && fileBytes.isNotEmpty) {
+          setState(() => _isUploadingFile = true);
+
+          final prefs = await SharedPreferences.getInstance();
+          final token = prefs.getString('access_token') ?? '';
+
+          final fileInfo = await ApiService.uploadChatFile(
+            token: token,
+            fileBytes: fileBytes,
+            fileName: file.name,
+          );
+
+          if (fileInfo != null) {
+            final ok = await ApiService.sendMessage(
+              token,
+              widget.threadId,
+              _msgController.text.trim(),
+              fileUrl: fileInfo['file_url'],
+              fileType: fileInfo['file_type'],
+              fileName: fileInfo['file_name'],
+            );
+
+            if (ok) {
+              _msgController.clear();
+              _loadMessages();
+            }
+          } else {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('خطا در آپلود فایل روی سرور.')),
+              );
+            }
+          }
+          setState(() => _isUploadingFile = false);
+        }
+      }
+    } catch (e) {
+      setState(() => _isUploadingFile = false);
+      print("خطا در انتخاب فایل چت: $e");
+    }
+  }
+
+  Future<void> _sendText() async {
     if (_msgController.text.trim().isEmpty) return;
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token') ?? '';
@@ -38,12 +101,31 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+  void _openFileUrl(String? url) async {
+    if (url == null || url.isEmpty) return;
+    final fullUrl = url.startsWith('http') ? url : '${ApiService.baseUrl}$url';
+    final uri = Uri.parse(fullUrl);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        appBar: AppBar(title: const Text('گفتگو درباره پروژه')),
+        backgroundColor: const Color(0xFFF8FAFC),
+        appBar: AppBar(
+          elevation: 0,
+          backgroundColor: Colors.white,
+          foregroundColor: const Color(0xFF1E293B),
+          title: const Text('گفتگو درباره پروژه', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          centerTitle: true,
+          actions: [
+            IconButton(icon: const Icon(Icons.refresh, color: Color(0xFF1E6AFB)), onPressed: _loadMessages)
+          ],
+        ),
         body: Column(
           children: [
             Expanded(
@@ -53,27 +135,140 @@ class _ChatPageState extends State<ChatPage> {
                 itemBuilder: (context, index) {
                   final m = _messages[index];
                   final isMe = m['is_me'] ?? false;
+                  final text = m['text'] ?? '';
+                  final fileUrl = m['file_url'];
+                  final fileType = m['file_type'];
+                  final fileName = m['file_name'] ?? 'فایل پیوست';
+
                   return Align(
                     alignment: isMe ? Alignment.centerLeft : Alignment.centerRight,
                     child: Container(
                       margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: isMe ? const Color(0xFF1E6AFB) : Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(12),
+                      constraints: BoxConstraints(
+                        maxWidth: MediaQuery.of(context).size.width * 0.70, // حداکثر ۷۰٪ عرض
                       ),
-                      child: Text(m['text'], style: TextStyle(color: isMe ? Colors.white : Colors.black87, fontSize: 12)),
+                      decoration: BoxDecoration(
+                        color: isMe ? const Color(0xFF1E6AFB) : Colors.white,
+                        borderRadius: BorderRadius.only(
+                          topLeft: const Radius.circular(16),
+                          topRight: const Radius.circular(16),
+                          bottomLeft: Radius.circular(isMe ? 2 : 16),
+                          bottomRight: Radius.circular(isMe ? 16 : 2),
+                        ),
+                        border: isMe ? null : Border.all(color: const Color(0xFFE2E8F0)),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4, offset: const Offset(0, 2))
+                        ],
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+
+                      // 📱 استفاده از IntrinsicWidth برای فشرده شدن دقیق اندازه خود متن پیام (تلگرامی)
+                      child: IntrinsicWidth(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (fileUrl != null) ...[
+                              if (fileType == 'image') ...[
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Image.network(
+                                    fileUrl.startsWith('http') ? fileUrl : '${ApiService.baseUrl}$fileUrl',
+                                    height: 150,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, color: Colors.grey),
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                              ] else ...[
+                                InkWell(
+                                  onTap: () => _openFileUrl(fileUrl),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: isMe ? Colors.white.withOpacity(0.2) : const Color(0xFFF1F5F9),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.insert_drive_file, color: isMe ? Colors.white : const Color(0xFF1E6AFB), size: 20),
+                                        const SizedBox(width: 8),
+                                        Flexible(
+                                          child: Text(
+                                            fileName,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isMe ? Colors.white : const Color(0xFF1E293B)),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Icon(Icons.file_download, color: isMe ? Colors.white : const Color(0xFF10B981), size: 18),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                              ],
+                            ],
+
+                            if (text.isNotEmpty)
+                              Text(
+                                text,
+                                style: TextStyle(color: isMe ? Colors.white : const Color(0xFF1E293B), fontSize: 12, height: 1.4),
+                              ),
+
+                            const SizedBox(height: 2),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                m['created_at'] ?? '',
+                                style: TextStyle(fontSize: 8, color: isMe ? Colors.white70 : Colors.grey),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   );
                 },
               ),
             ),
-            Padding(
+
+            // کادر پایین: آیکون گیره کاغذ + کادر تایپ + دکمه ارسال
+            Container(
+              color: Colors.white,
               padding: const EdgeInsets.all(12.0),
               child: Row(
                 children: [
-                  Expanded(child: TextField(controller: _msgController, decoration: const InputDecoration(hintText: 'پیام خود را بنویسید...'))),
-                  IconButton(icon: const Icon(Icons.send, color: Color(0xFF1E6AFB)), onPressed: _send),
+                  IconButton(
+                    icon: _isUploadingFile
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF1E6AFB)))
+                        : const Icon(Icons.attach_file, color: Color(0xFF1E6AFB), size: 22),
+                    onPressed: _isUploadingFile ? null : _pickAndSendFile,
+                    tooltip: 'ارسال فایل یا عکس',
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: _msgController,
+                      style: const TextStyle(fontSize: 12),
+                      decoration: InputDecoration(
+                        hintText: 'پیام خود را بنویسید...',
+                        hintStyle: const TextStyle(fontSize: 11, color: Colors.grey),
+                        filled: true,
+                        fillColor: const Color(0xFFF1F5F9),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  CircleAvatar(
+                    backgroundColor: const Color(0xFF1E6AFB),
+                    child: IconButton(
+                      icon: const Icon(Icons.send, color: Colors.white, size: 18),
+                      onPressed: _sendText,
+                    ),
+                  )
                 ],
               ),
             )

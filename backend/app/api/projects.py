@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import os
+import uuid
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
@@ -20,7 +22,33 @@ MAJORS = [
 ]
 CITIES = ["تهران", "اصفهان", "شیراز", "مشهد", "تبریز", "کرج", "اهواز", "قم", "رشت", "دورکاری"]
 CATEGORIES = ["توسعه نرم‌افزار", "طراحی UI/UX", "دیجیتال مارکتینگ", "هوش مصنوعی و داده", "شبکه و امنیت", "مدیریت و صنایع"]
+CHAT_UPLOAD_DIR = "uploads/chat"
+os.makedirs(CHAT_UPLOAD_DIR, exist_ok=True)
 
+# ۱. روتر آپلود فایل در چت (عکس، PDF، ZIP و...)
+@router.post("/chat/upload-file")
+async def upload_chat_file(
+        file: UploadFile = File(...),
+        current_user: models.User = Depends(get_current_user)
+):
+    file_ext = os.path.splitext(file.filename)[1].lower()
+    is_image = file_ext in [".png", ".jpg", ".jpeg", ".webp", ".gif"]
+    file_type = "image" if is_image else "document"
+
+    safe_filename = file.filename.replace(' ', '_')
+    new_filename = f"Chat_{uuid.uuid4().hex[:8]}_{safe_filename}"
+    file_path = os.path.join(CHAT_UPLOAD_DIR, new_filename)
+
+    with open(file_path, "wb") as f:
+        content = await file.read()
+        f.write(content)
+
+    relative_url = f"/uploads/chat/{new_filename}"
+    return {
+        "file_url": relative_url,
+        "file_name": file.filename,
+        "file_type": file_type
+    }
 def calculate_match_score(student_profile: models.StudentProfile, project: models.Project) -> int:
     if not student_profile: return 60
     target_univs = project.target_universities or []
@@ -326,22 +354,41 @@ def get_chat_threads(db: Session = Depends(get_db), current_user: models.User = 
 @router.get("/chat/messages/{thread_id}")
 def get_messages(thread_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     msgs = db.query(models.ChatMessage).filter(models.ChatMessage.thread_id == thread_id).order_by(models.ChatMessage.created_at.asc()).all()
-    return [{"id": str(m.id), "sender_id": str(m.sender_id), "is_me": m.sender_id == current_user.id, "text": m.text, "created_at": m.created_at.strftime("%H:%M") if m.created_at else ""} for m in msgs]
+    return [{
+        "id": str(m.id),
+        "sender_id": str(m.sender_id),
+        "is_me": m.sender_id == current_user.id,
+        "text": m.text or "",
+        "file_url": m.file_url,
+        "file_type": m.file_type,
+        "file_name": m.file_name,
+        "created_at": m.created_at.strftime("%H:%M") if m.created_at else ""
+    } for m in msgs]
 
+# ۳. ویرایش ارسال پیام در چت
 @router.post("/chat/send")
 def send_message(body: schemas.SendMessageSchema, db: Session = Depends(get_db), user: models.User = Depends(get_current_user)):
-    msg = models.ChatMessage(thread_id=body.thread_id, sender_id=user.id, text=body.text)
+    msg = models.ChatMessage(
+        thread_id=body.thread_id,
+        sender_id=user.id,
+        text=body.text,
+        file_url=body.file_url,
+        file_type=body.file_type,
+        file_name=body.file_name
+    )
     db.add(msg)
 
-    # 🔔 ثبت نوتیفیکیشن پیام جدید برای طرف مقابل
+    # ثبت نوتیفیکیشن
     thread = db.query(models.ChatThread).filter(models.ChatThread.id == body.thread_id).first()
     if thread:
         recipient_id = thread.student_id if user.id == thread.employer_id else thread.employer_id
         sender_name = "کارفرما" if user.role == models.UserRole.COMPANY_REP else (user.student_profile.full_name if (user.student_profile and user.student_profile.full_name) else "دانشجو")
+
+        msg_preview = f"فایل پیوست: {body.file_name}" if body.file_url else (body.text[:35] if body.text else "پیام جدید")
         notif = models.Notification(
             user_id=recipient_id,
             title="پیام جدید در چت",
-            message=f"پیام جدید از طرف {sender_name}: {body.text[:35]}...",
+            message=f"پیام جدید از طرف {sender_name}: {msg_preview}",
             type="chat",
             link_id=str(thread.id)
         )
@@ -403,6 +450,7 @@ def get_notification_counts(db: Session = Depends(get_db), current_user: models.
     }
 
 # دریافت لیست همه نوتیفیکیشن‌های کاربر
+# دریافت لیست کامل نوتیفیکیشن‌های کاربر همراه با شناسه لینک ارجاع
 @router.get("/notifications/")
 def get_notifications(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     notifs = db.query(models.Notification).filter(models.Notification.user_id == current_user.id).order_by(models.Notification.created_at.desc()).all()
@@ -414,10 +462,10 @@ def get_notifications(db: Session = Depends(get_db), current_user: models.User =
             "title": n.title,
             "message": n.message,
             "type": n.type,
+            "link_id": n.link_id, # <--- ارسال آیدی لینک ارجاع به فلاتر
             "is_read": n.is_read,
             "created_at": n.created_at.strftime("%Y/%m/%d - %H:%M") if n.created_at else ""
         })
-        # علامت‌گذاری به عنوان خوانده‌شده
         n.is_read = True
 
     db.commit()

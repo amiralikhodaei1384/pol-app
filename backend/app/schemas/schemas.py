@@ -136,7 +136,10 @@ class ScheduleInterviewSchema(BaseModel):
 
 class SendMessageSchema(BaseModel):
     thread_id: UUID
-    text: str
+    text: Optional[str] = ""
+    file_url: Optional[str] = None
+    file_type: Optional[str] = None
+    file_name: Optional[str] = None
 
 class NotificationOut(BaseModel):
     id: UUID

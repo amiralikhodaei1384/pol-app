@@ -439,7 +439,14 @@ class ApiService {
   }
 
   // ۱۸. ارسال پیام در چت
-  static Future<bool> sendMessage(String token, String threadId, String text) async {
+  static Future<bool> sendMessage(
+      String token,
+      String threadId,
+      String text, {
+        String? fileUrl,
+        String? fileType,
+        String? fileName,
+      }) async {
     try {
       final res = await http.post(
         Uri.parse("$baseUrl/projects/chat/send"),
@@ -447,7 +454,13 @@ class ApiService {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",
         },
-        body: jsonEncode({"thread_id": threadId, "text": text}),
+        body: jsonEncode({
+          "thread_id": threadId,
+          "text": text,
+          "file_url": fileUrl,
+          "file_type": fileType,
+          "file_name": fileName,
+        }),
       ).timeout(const Duration(seconds: 5));
 
       return res.statusCode == 200;
@@ -485,4 +498,29 @@ class ApiService {
     } catch (e) {}
     return [];
   }
+  // آپلود فایل اختصاصی چت
+  static Future<Map<String, dynamic>?> uploadChatFile({
+    required String token,
+    required List<int> fileBytes,
+    required String fileName,
+  }) async {
+    try {
+      var req = http.MultipartRequest('POST', Uri.parse("$baseUrl/projects/chat/upload-file"));
+      req.headers['Authorization'] = 'Bearer $token';
+      req.files.add(http.MultipartFile.fromBytes('file', fileBytes, filename: fileName));
+
+      var streamedResponse = await req.send();
+      var response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+    } catch (e) {
+      print("خطا در آپلود فایل چت: $e");
+    }
+    return null;
+  }
+
+
+
 }
