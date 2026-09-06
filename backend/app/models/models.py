@@ -151,10 +151,11 @@ class ChatMessage(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     thread_id = Column(UUID(as_uuid=True), ForeignKey("chat_threads.id"))
     sender_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
-    text = Column(Text, nullable=True)          # متن پیام (می‌تواند خالی باشد اگر فقط فایل بفرستد)
-    file_url = Column(String, nullable=True)   # <--- لینک فایل ذخیره شده در سرور
-    file_type = Column(String, nullable=True)  # <--- نوع فایل ("image" یا "document")
-    file_name = Column(String, nullable=True)  # <--- نام اصلی فایل
+    text = Column(Text, nullable=True)
+    file_url = Column(String, nullable=True)
+    file_type = Column(String, nullable=True)
+    file_name = Column(String, nullable=True)
+    is_read = Column(Boolean, default=False) # <--- فیلد سین خوردن پیام (تیک دوتیک)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 # مدل جدول نوتیفیکیشن‌ها و اعلان‌ها

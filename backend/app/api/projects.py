@@ -351,17 +351,44 @@ def get_chat_threads(db: Session = Depends(get_db), current_user: models.User = 
         res.append({"thread_id": str(t.id), "title": app_obj.project.title if (app_obj and app_obj.project) else "گفتگو", "other_party": other_name})
     return res
 
+# دریافت پیام‌های چت + سین زدن قطعی پیام‌های طرف مقابل
 @router.get("/chat/messages/{thread_id}")
-def get_messages(thread_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    msgs = db.query(models.ChatMessage).filter(models.ChatMessage.thread_id == thread_id).order_by(models.ChatMessage.created_at.asc()).all()
+def get_messages(
+        thread_id: str,
+        db: Session = Depends(get_db),
+        current_user: models.User = Depends(get_current_user)
+):
+    try:
+        t_uuid = uuid.UUID(thread_id)
+    except ValueError:
+        t_uuid = thread_id
+
+    # ۱. آپدیت قطعی پیام‌های دریافتی طرف مقابل به حالت سین‌شده (is_read = True)
+    unread_msgs = db.query(models.ChatMessage).filter(
+        models.ChatMessage.thread_id == t_uuid,
+        models.ChatMessage.sender_id != current_user.id,
+        models.ChatMessage.is_read == False
+    ).all()
+
+    if unread_msgs:
+        for msg in unread_msgs:
+            msg.is_read = True
+        db.commit()
+
+    # ۲. خواندن لیست کامل پیام‌ها
+    msgs = db.query(models.ChatMessage).filter(
+        models.ChatMessage.thread_id == t_uuid
+    ).order_by(models.ChatMessage.created_at.asc()).all()
+
     return [{
         "id": str(m.id),
         "sender_id": str(m.sender_id),
-        "is_me": m.sender_id == current_user.id,
+        "is_me": (str(m.sender_id) == str(current_user.id)),
         "text": m.text or "",
         "file_url": m.file_url,
         "file_type": m.file_type,
         "file_name": m.file_name,
+        "is_read": bool(m.is_read), # ارسال بولیانی صریح برای تیک دوم
         "created_at": m.created_at.strftime("%H:%M") if m.created_at else ""
     } for m in msgs]
 
@@ -497,11 +524,15 @@ def delete_chat_message(
         db: Session = Depends(get_db),
         current_user: models.User = Depends(get_current_user)
 ):
-    msg = db.query(models.ChatMessage).filter(models.ChatMessage.id == message_id).first()
+    try:
+        msg_uuid = uuid.UUID(message_id)
+    except ValueError:
+        msg_uuid = message_id
+
+    msg = db.query(models.ChatMessage).filter(models.ChatMessage.id == msg_uuid).first()
     if not msg:
         raise HTTPException(status_code=404, detail="پیام یافت نشد.")
 
-    # فیلتر امنیتی: تنها فرستنده پیام مجاز به حذف آن است
     if str(msg.sender_id) != str(current_user.id):
         raise HTTPException(status_code=403, detail="شما تنها مجاز به حذف پیام‌های خود هستید.")
 
