@@ -122,10 +122,10 @@ class Application(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     student_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id"))
+    message = Column(Text, nullable=True) # <--- ستون جدید: ذخیره پیام دانشجو موقع اپلای
     status = Column(Enum(ApplicationStatus), default=ApplicationStatus.APPLIED)
     contract_status = Column(Enum(ContractStatus), default=ContractStatus.PENDING_PHYSICAL)
 
-    # اطلاعات دعوت به مصاحبه حضوری
     interview_date = Column(String, nullable=True)
     interview_address = Column(String, nullable=True)
     interview_note = Column(Text, nullable=True)

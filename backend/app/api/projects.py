@@ -152,7 +152,7 @@ def get_my_applications(db: Session = Depends(get_db), current_user: models.User
 # بورد رزومه‌ها و متقاضیان دریافت شده برای کارفرما (با قابلیت فیلتر بر اساس یک پروژه خاص)
 @router.get("/company-applications")
 def get_company_applications(
-        project_id: Optional[str] = None, # <--- فیلتر اختیاری بر اساس پروژه
+        project_id: Optional[str] = None,
         db: Session = Depends(get_db),
         current_user: models.User = Depends(get_current_user)
 ):
@@ -164,8 +164,6 @@ def get_company_applications(
     project_ids = [p.id for p in company_projects]
 
     query = db.query(models.Application).filter(models.Application.project_id.in_(project_ids))
-
-    # اگر آیدی پروژه ارسال شده باشد، فقط متقاضیان همان پروژه فیلتر می‌شوند
     if project_id and project_id.strip():
         query = query.filter(models.Application.project_id == project_id)
 
@@ -188,6 +186,7 @@ def get_company_applications(
             "student_work_experiences": sp.work_experiences if sp else [],
             "student_courses": sp.courses if sp else [],
             "student_resume": sp.resume_file if sp else None,
+            "student_message": a.message, # <--- ارسال پیام دانشجو به کارفرما
             "match_score": calculate_match_score(sp, a.project) if (sp and a.project) else 75,
             "status": a.status.value if hasattr(a.status, 'value') else str(a.status),
             "interview_date": a.interview_date,
@@ -448,23 +447,42 @@ def send_message(body: schemas.SendMessageSchema, db: Session = Depends(get_db),
 
 # ۱۰. ثبت درخواست پروژه توسط دانشجو (حتماً باید انتهای فایل باشد)
 @router.post("/{project_id}/apply")
-def apply_for_project(project_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    if current_user.role != models.UserRole.STUDENT: raise HTTPException(status_code=403, detail="تنها دانشجویان مجاز به ارسال درخواست هستند.")
+def apply_for_project(
+        project_id: str,
+        body: Optional[schemas.ApplyProjectSchema] = None, # <--- دریافت پیام دانشجو
+        db: Session = Depends(get_db),
+        current_user: models.User = Depends(get_current_user)
+):
+    if current_user.role != models.UserRole.STUDENT:
+        raise HTTPException(status_code=403, detail="تنها دانشجویان مجاز به ارسال درخواست هستند.")
+
     project = db.query(models.Project).filter(models.Project.id == project_id).first()
-    if not project: raise HTTPException(status_code=404, detail="پروژه یافت نشد.")
+    if not project:
+        raise HTTPException(status_code=404, detail="پروژه یافت نشد.")
+
     if db.query(models.Application).filter(models.Application.student_id == current_user.id, models.Application.project_id == project.id).first():
         raise HTTPException(status_code=400, detail="شما قبلاً برای این پروژه درخواست ارسال کرده‌اید.")
 
-    db.add(models.Application(student_id=current_user.id, project_id=project.id, status=models.ApplicationStatus.APPLIED))
+    user_msg = body.message if body else None
 
-    # 🔔 ثبت نوتیفیکیشن خودکار برای کارفرما
+    # ذخیره درخواست به همراه پیام دانشجو
+    new_app = models.Application(
+        student_id=current_user.id,
+        project_id=project.id,
+        message=user_msg,
+        status=models.ApplicationStatus.APPLIED
+    )
+    db.add(new_app)
+
+    # ثبت نوتیفیکیشن کارفرما به همراه پیش‌نمایش پیام دانشجو
     employer_rep = db.query(models.CompanyRepresentative).filter(models.CompanyRepresentative.company_id == project.company_id).first()
     if employer_rep:
         student_name = current_user.student_profile.full_name if (current_user.student_profile and current_user.student_profile.full_name) else "یک دانشجو"
+        msg_preview = f" با پیام: «{user_msg[:30]}...»" if user_msg else ""
         notif = models.Notification(
             user_id=employer_rep.user_id,
             title="درخواست جدید برای پروژه",
-            message=f"{student_name} برای پروژه «{project.title}» درخواست ارسال کرد.",
+            message=f"{student_name} برای پروژه «{project.title}» درخواست فرستاد{msg_preview}.",
             type="application",
             link_id=str(project.id)
         )
@@ -472,7 +490,6 @@ def apply_for_project(project_id: str, db: Session = Depends(get_db), current_us
 
     db.commit()
     return {"message": "درخواست شما با موفقیت ثبت شد."}
-
 
 
 

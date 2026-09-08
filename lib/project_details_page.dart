@@ -35,19 +35,21 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
 
     setState(() => _isApplying = true);
 
+    // ارسال پارامتر message به تابع API
     final success = await ApiService.applyForProject(
       token,
       widget.project['id'].toString(),
+      message: _messageController.text.trim(), // <--- فرستادن متن پیام دانشجو
     );
 
     setState(() => _isApplying = false);
 
     if (success && mounted) {
       setState(() => _isApplied = true);
-      Navigator.pop(context); // بستن دیالوگ
+      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('درخواست شما با موفقیت ارسال شد و در انتظار بررسی است.'),
+          content: Text('درخواست و پیام شما با موفقیت ارسال شد.'),
           backgroundColor: Color(0xFF10B981),
         ),
       );

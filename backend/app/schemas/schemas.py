@@ -154,3 +154,6 @@ class NotificationOut(BaseModel):
 class EditMessageSchema(BaseModel):
     message_id: UUID
     text: str
+
+class ApplyProjectSchema(BaseModel):
+    message: Optional[str] = None # پیام کوتاه همراه اپلای

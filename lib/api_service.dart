@@ -327,11 +327,16 @@ class ApiService {
   }
 
   // ۱۲. ارسال درخواست برای پروژه توسط دانشجو
-  static Future<bool> applyForProject(String token, String projectId) async {
+  // ارسال درخواست پروژه توسط دانشجو همراه با پیام اختیاری
+  static Future<bool> applyForProject(String token, String projectId, {String? message}) async {
     try {
       final res = await http.post(
         Uri.parse("$baseUrl/projects/$projectId/apply"),
-        headers: {"Authorization": "Bearer $token"},
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+        body: jsonEncode({"message": message}),
       ).timeout(const Duration(seconds: 5));
 
       return res.statusCode == 200 || res.statusCode == 201;

@@ -288,6 +288,7 @@ class _EmployerApplicationsPageState extends State<EmployerApplicationsPage> {
             final app = _applications[index];
             final statusRaw = app['status'] ?? 'applied';
             final isShortlisted = statusRaw == 'shortlisted';
+            final studentMsg = app['student_message']?.toString().trim();
 
             return Card(
               margin: const EdgeInsets.only(bottom: 12),
@@ -312,6 +313,34 @@ class _EmployerApplicationsPageState extends State<EmployerApplicationsPage> {
                     Text('برای پروژه: ${app['project_title']}', style: const TextStyle(color: Color(0xFF1E6AFB), fontSize: 11, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 2),
                     Text('${app['student_university']} • ${app['student_major']}', style: const TextStyle(color: Colors.grey, fontSize: 11)),
+
+                    // ✉️ باکس طلایی نمایش پیام دانشجو
+                    if (studentMsg != null && studentMsg.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF8E1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFFFE082)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.format_quote_rounded, size: 16, color: Colors.amber),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'پیام دانشجو: $studentMsg',
+                                style: const TextStyle(fontSize: 11, color: Color(0xFF5D4037), height: 1.4),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
                     const SizedBox(height: 12),
 
                     Wrap(
