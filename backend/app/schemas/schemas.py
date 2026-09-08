@@ -150,3 +150,7 @@ class NotificationOut(BaseModel):
     created_at: datetime
     class Config:
         from_attributes = True
+
+class EditMessageSchema(BaseModel):
+    message_id: UUID
+    text: str

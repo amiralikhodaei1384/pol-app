@@ -352,6 +352,33 @@ def get_chat_threads(db: Session = Depends(get_db), current_user: models.User = 
     return res
 
 # دریافت پیام‌های چت + سین زدن قطعی پیام‌های طرف مقابل
+# روتر جدید: ویرایش پیام چت توسط فرستنده
+@router.put("/chat/messages/{message_id}")
+def edit_chat_message(
+        message_id: str,
+        body: schemas.EditMessageSchema,
+        db: Session = Depends(get_db),
+        current_user: models.User = Depends(get_current_user)
+):
+    try:
+        msg_uuid = uuid.UUID(message_id)
+    except ValueError:
+        msg_uuid = message_id
+
+    msg = db.query(models.ChatMessage).filter(models.ChatMessage.id == msg_uuid).first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="پیام یافت نشد.")
+
+    if str(msg.sender_id) != str(current_user.id):
+        raise HTTPException(status_code=403, detail="تنها مجاز به ویرایش پیام‌های خود هستید.")
+
+    msg.text = body.text
+    msg.is_edited = True
+    db.commit()
+    return {"message": "پیام با موفقیت ویرایش شد."}
+
+
+# در تابع get_messages، فیلد is_edited را هم به خروجی اضافه کنید:
 @router.get("/chat/messages/{thread_id}")
 def get_messages(
         thread_id: str,
@@ -363,19 +390,13 @@ def get_messages(
     except ValueError:
         t_uuid = thread_id
 
-    # ۱. آپدیت قطعی پیام‌های دریافتی طرف مقابل به حالت سین‌شده (is_read = True)
-    unread_msgs = db.query(models.ChatMessage).filter(
+    db.query(models.ChatMessage).filter(
         models.ChatMessage.thread_id == t_uuid,
         models.ChatMessage.sender_id != current_user.id,
         models.ChatMessage.is_read == False
-    ).all()
+    ).update({"is_read": True}, synchronize_session=False)
+    db.commit()
 
-    if unread_msgs:
-        for msg in unread_msgs:
-            msg.is_read = True
-        db.commit()
-
-    # ۲. خواندن لیست کامل پیام‌ها
     msgs = db.query(models.ChatMessage).filter(
         models.ChatMessage.thread_id == t_uuid
     ).order_by(models.ChatMessage.created_at.asc()).all()
@@ -388,7 +409,8 @@ def get_messages(
         "file_url": m.file_url,
         "file_type": m.file_type,
         "file_name": m.file_name,
-        "is_read": bool(m.is_read), # ارسال بولیانی صریح برای تیک دوم
+        "is_read": bool(m.is_read),
+        "is_edited": getattr(m, 'is_edited', False), # <--- ارسال وضعیت ویرایش
         "created_at": m.created_at.strftime("%H:%M") if m.created_at else ""
     } for m in msgs]
 

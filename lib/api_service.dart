@@ -565,5 +565,26 @@ class ApiService {
       return false;
     }
   }
+  // ویرایش متن پیام چت
+  static Future<bool> editChatMessage(String token, String messageId, String newText) async {
+    try {
+      final res = await http.put(
+        Uri.parse("$baseUrl/projects/chat/messages/$messageId"),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+        body: jsonEncode({
+          "message_id": messageId,
+          "text": newText,
+        }),
+      ).timeout(const Duration(seconds: 5));
+
+      return res.statusCode == 200;
+    } catch (e) {
+      print("خطا در ویرایش پیام: $e");
+      return false;
+    }
+  }
 
 }

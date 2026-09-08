@@ -23,12 +23,15 @@ class _ChatPageState extends State<ChatPage> {
   bool _isInitialLoading = true;
   Timer? _pollingTimer;
 
+  // متغیر حالت ویرایش
+  String? _editingMessageId;
+
   @override
   void initState() {
     super.initState();
     _loadMessages(isFirstTime: true);
 
-    // ⚡ آپدیت صامت و زنده هر ۲ ثانیه برای سین خوردن و دریافت پیام جدید (بدون ریلود و پرپک)
+    // رفرش زنده هر ۲ ثانیه برای سین خوردن و دریافت پیام
     _pollingTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       if (mounted) {
         _loadMessages(isFirstTime: false);
@@ -118,18 +121,33 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-  Future<void> _sendText() async {
-    if (_msgController.text.trim().isEmpty) return;
+  // ارسال پیام جدید یا ذخیره ویرایش
+  Future<void> _sendOrUpdateText() async {
+    final text = _msgController.text.trim();
+    if (text.isEmpty) return;
+
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token') ?? '';
-    final ok = await ApiService.sendMessage(token, widget.threadId, _msgController.text.trim());
-    if (ok) {
-      _msgController.clear();
-      _loadMessages();
+
+    if (_editingMessageId != null) {
+      // حالت ویرایش پیام
+      final ok = await ApiService.editChatMessage(token, _editingMessageId!, text);
+      if (ok) {
+        setState(() => _editingMessageId = null);
+        _msgController.clear();
+        _loadMessages();
+      }
+    } else {
+      // حالت ارسال پیام جدید
+      final ok = await ApiService.sendMessage(token, widget.threadId, text);
+      if (ok) {
+        _msgController.clear();
+        _loadMessages();
+      }
     }
   }
 
-  // 📱 منوی اکشن کپی و حذف پیام
+  // 📱 منوی اکشن تلگرامی کپی، ویرایش و حذف پیام
   void _showTelegramMessageMenu(dynamic m) {
     final isMe = m['is_me'] ?? false;
     final text = m['text'] ?? '';
@@ -154,6 +172,8 @@ class _ChatPageState extends State<ChatPage> {
                 const SizedBox(height: 8),
                 Container(width: 36, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
                 const SizedBox(height: 12),
+
+                // کپی متن
                 if (text.toString().isNotEmpty)
                   ListTile(
                     leading: const Icon(Icons.copy_rounded, color: Color(0xFF1E6AFB)),
@@ -166,6 +186,22 @@ class _ChatPageState extends State<ChatPage> {
                       );
                     },
                   ),
+
+                // ✏️ ویرایش پیام (فقط برای پیام‌های خودم)
+                if (isMe && messageId.isNotEmpty && text.toString().isNotEmpty)
+                  ListTile(
+                    leading: const Icon(Icons.edit_rounded, color: Color(0xFF10B981)),
+                    title: const Text('ویرایش پیام', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      setState(() {
+                        _editingMessageId = messageId;
+                        _msgController.text = text;
+                      });
+                    },
+                  ),
+
+                // 🗑️ حذف پیام
                 if (isMe && messageId.isNotEmpty)
                   ListTile(
                     leading: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
@@ -216,7 +252,7 @@ class _ChatPageState extends State<ChatPage> {
         ),
         body: Column(
           children: [
-            // لیست پیام‌ها با دوتیک سبز رنگ زنده
+            // لیست پیام‌ها
             Expanded(
               child: _isInitialLoading
                   ? const Center(child: CircularProgressIndicator(color: Color(0xFF1E6AFB)))
@@ -231,6 +267,7 @@ class _ChatPageState extends State<ChatPage> {
                     final m = _messages[index];
                     final isMe = m['is_me'] ?? false;
                     final isRead = (m['is_read'] == true) || (m['is_read'] == 1) || (m['is_read'].toString() == 'true');
+                    final isEdited = (m['is_edited'] == true) || (m['is_edited'] == 1) || (m['is_edited'].toString() == 'true');
                     final text = m['text'] ?? '';
                     final fileUrl = m['file_url'];
                     final fileType = m['file_type'];
@@ -316,11 +353,17 @@ class _ChatPageState extends State<ChatPage> {
 
                                 const SizedBox(height: 2),
 
-                                // 🟢 تیک تک و دوتیک سبز رنگ سین خوردن (✓ / ✓✓)
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     const Spacer(),
+                                    // برچسب "ویرایش شده"
+                                    if (isEdited) ...[
+                                      Text(
+                                        'ویرایش شده  ',
+                                        style: TextStyle(fontSize: 7, color: isMe ? Colors.white60 : Colors.grey),
+                                      ),
+                                    ],
                                     Text(
                                       m['created_at'] ?? '',
                                       style: TextStyle(fontSize: 8, color: isMe ? Colors.white70 : Colors.grey),
@@ -328,9 +371,9 @@ class _ChatPageState extends State<ChatPage> {
                                     if (isMe) ...[
                                       const SizedBox(width: 4),
                                       Icon(
-                                        isRead ? Icons.done_all : Icons.done, // ✓✓ دوتیک vs ✓ تک‌تیک
+                                        isRead ? Icons.done_all : Icons.done,
                                         size: 13,
-                                        color: isRead ? const Color(0xFF6EE7B7) : Colors.white70, // رنگ دوتیک سبز سین‌شده
+                                        color: isRead ? const Color(0xFF6EE7B7) : Colors.white70,
                                       ),
                                     ],
                                   ],
@@ -345,6 +388,37 @@ class _ChatPageState extends State<ChatPage> {
                 ),
               ),
             ),
+
+            // ✏️ کادر بالا برای حالت ویرایش پیام
+            if (_editingMessageId != null)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                color: const Color(0xFFE3F2FD),
+                child: Row(
+                  children: [
+                    const Icon(Icons.edit_rounded, size: 18, color: Color(0xFF1E6AFB)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('در حال ویرایش پیام', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF1E6AFB))),
+                          Text(_msgController.text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 18, color: Colors.grey),
+                      onPressed: () {
+                        setState(() {
+                          _editingMessageId = null;
+                          _msgController.clear();
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
 
             // کادر پایین ارسال پیام و فایل
             Container(
@@ -364,7 +438,7 @@ class _ChatPageState extends State<ChatPage> {
                       controller: _msgController,
                       style: const TextStyle(fontSize: 12),
                       decoration: InputDecoration(
-                        hintText: 'پیام خود را بنویسید...',
+                        hintText: _editingMessageId != null ? 'متن جدید پیام را بنویسید...' : 'پیام خود را بنویسید...',
                         hintStyle: const TextStyle(fontSize: 11, color: Colors.grey),
                         filled: true,
                         fillColor: const Color(0xFFF1F5F9),
@@ -375,10 +449,10 @@ class _ChatPageState extends State<ChatPage> {
                   ),
                   const SizedBox(width: 8),
                   CircleAvatar(
-                    backgroundColor: const Color(0xFF1E6AFB),
+                    backgroundColor: _editingMessageId != null ? const Color(0xFF10B981) : const Color(0xFF1E6AFB),
                     child: IconButton(
-                      icon: const Icon(Icons.send, color: Colors.white, size: 18),
-                      onPressed: _sendText,
+                      icon: Icon(_editingMessageId != null ? Icons.check : Icons.send, color: Colors.white, size: 18),
+                      onPressed: _sendOrUpdateText,
                     ),
                   )
                 ],

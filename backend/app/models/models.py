@@ -155,7 +155,8 @@ class ChatMessage(Base):
     file_url = Column(String, nullable=True)
     file_type = Column(String, nullable=True)
     file_name = Column(String, nullable=True)
-    is_read = Column(Boolean, default=False) # <--- فیلد سین خوردن پیام (تیک دوتیک)
+    is_read = Column(Boolean, default=False)
+    is_edited = Column(Boolean, default=False) # <--- فیلد ویرایش پیام
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 # مدل جدول نوتیفیکیشن‌ها و اعلان‌ها
