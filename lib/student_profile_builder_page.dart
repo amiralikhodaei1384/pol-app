@@ -5,6 +5,7 @@ import 'package:pol_app/api_service.dart';
 import 'package:pol_app/dashboard_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pol_app/shamsi_date_picker_dialog.dart';
+
 class StudentProfileBuilderPage extends StatefulWidget {
   const StudentProfileBuilderPage({super.key});
 
@@ -43,11 +44,18 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
   // ۴. پورتفولیو و رزومه
   final _githubController = TextEditingController();
   final _figmaController = TextEditingController();
-  String? _resumeUserFileName; // نام فایل انتخابی برای نمایش در باکس
-  String? _resumeServerPath;   // آدرس فایل در سرور
+  String? _resumeUserFileName; // نام اصلی فایل جهت نمایش در UI
+  String? _resumeServerPath;   // مسیر ذخیره فیزیکی روی سرور
 
   final _persianRegex = RegExp(r'^[\u0600-\u06FF\s]+$');
   final _phoneRegex = RegExp(r'^09\d{9}$');
+
+  List<String> _allUniversities = ['دانشگاه تهران', 'دانشگاه صنعتی شریف', 'دانشگاه صنعتی امیرکبیر', 'دانشگاه علم و صنعت', 'سایر'];
+  List<String> _allMajors = ['مهندسی کامپیوتر', 'مهندسی برق', 'مهندسی صنایع', 'سایر'];
+  List<String> _allSkillsOptions = [
+    "Flutter", "Dart", "Python", "React", "JavaScript", "SQL", "Figma",
+    "UI/UX", "Django", "FastAPI", "Node.js", "C++", "Java", "Git", "Docker"
+  ];
 
   @override
   void initState() {
@@ -58,6 +66,16 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
   Future<void> _loadExistingProfile() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token') ?? '';
+
+    // دریافت گزینه‌های استاندارد دیتابیس
+    final options = await ApiService.fetchOptions();
+    if (options != null && mounted) {
+      setState(() {
+        if (options['universities'] != null) _allUniversities = (options['universities'] as List).cast<String>();
+        if (options['majors'] != null) _allMajors = (options['majors'] as List).cast<String>();
+        if (options['skills'] != null) _allSkillsOptions = (options['skills'] as List).cast<String>();
+      });
+    }
 
     if (token.isNotEmpty) {
       final userData = await ApiService.getMe(token);
@@ -110,7 +128,6 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
         if (p['resume_file'] != null && p['resume_file'].toString().isNotEmpty) {
           final serverPath = p['resume_file'].toString();
           _resumeServerPath = serverPath;
-          // استخراج نام فایل از آدرس سرور (مثلاً Resume_Ali_1a2b.pdf)
           _resumeUserFileName = serverPath.split('/').last;
         }
       }
@@ -130,6 +147,7 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
     );
   }
 
+  // انتخاب فقط فایل PDF
   Future<void> _pickAndUploadResume() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -162,8 +180,8 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
 
           if (savedPath != null) {
             setState(() {
-              _resumeUserFileName = file.name; // نمایش نام اصلی پی‌دی‌اف انتخابی کاربر
-              _resumeServerPath = savedPath;   // آدرس سرور برای دیتابیس
+              _resumeUserFileName = file.name; // نمایش اسم اصلی پی‌دی‌اف انتخابی کاربر
+              _resumeServerPath = savedPath;   // مسیر ذخیره در سرور
             });
             _showSnack('فایل رزومه PDF با موفقیت ذخیره شد.', isError: false);
           }
@@ -202,10 +220,11 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
     }
   }
 
+  // دیالوگ افزودن سابقه تحصیلی با منوی کشویی دانشگاه و رشته
   void _showAddEducationDialog() {
     String degree = 'کارشناسی';
-    final universityCtrl = TextEditingController();
-    final majorCtrl = TextEditingController();
+    String? selectedUniversity;
+    String? selectedMajor;
     final startYearCtrl = TextEditingController();
     final endYearCtrl = TextEditingController();
     final gpaCtrl = TextEditingController();
@@ -242,20 +261,29 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
                         onChanged: (val) => degree = val ?? degree,
                       ),
                       const SizedBox(height: 12),
-                      _buildLabel('نام دانشگاه'),
-                      TextField(
-                        controller: universityCtrl,
-                        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\u0600-\u06FF\s]'))],
-                        decoration: _inputDec('مثال: دانشگاه تهران'),
+
+                      _buildLabel('نام دانشگاه *'),
+                      DropdownButtonFormField<String>(
+                        value: selectedUniversity,
+                        decoration: _inputDec('انتخاب دانشگاه از لیست'),
+                        items: _allUniversities.map((u) {
+                          return DropdownMenuItem(value: u, child: Text(u, style: const TextStyle(fontSize: 12)));
+                        }).toList(),
+                        onChanged: (val) => setModalState(() => selectedUniversity = val),
                       ),
                       const SizedBox(height: 12),
-                      _buildLabel('رشته تحصیلی'),
-                      TextField(
-                        controller: majorCtrl,
-                        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\u0600-\u06FF\s]'))],
-                        decoration: _inputDec('مثال: مهندسی کامپیوتر'),
+
+                      _buildLabel('رشته تحصیلی *'),
+                      DropdownButtonFormField<String>(
+                        value: selectedMajor,
+                        decoration: _inputDec('انتخاب رشته تحصیلی'),
+                        items: _allMajors.map((m) {
+                          return DropdownMenuItem(value: m, child: Text(m, style: const TextStyle(fontSize: 12)));
+                        }).toList(),
+                        onChanged: (val) => setModalState(() => selectedMajor = val),
                       ),
                       const SizedBox(height: 12),
+
                       Row(
                         children: [
                           Expanded(
@@ -330,11 +358,11 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
                         height: 44,
                         child: ElevatedButton(
                           onPressed: () {
-                            final gpa = double.tryParse(gpaCtrl.text.trim());
-                            if (universityCtrl.text.isEmpty || majorCtrl.text.isEmpty) {
-                              _showSnack('نام دانشگاه و رشته تحصیلی الزامی است.');
+                            if (selectedUniversity == null || selectedMajor == null) {
+                              _showSnack('لطفاً دانشگاه و رشته تحصیلی را از لیست انتخاب کنید.');
                               return;
                             }
+                            final gpa = double.tryParse(gpaCtrl.text.trim());
                             if (gpa != null && (gpa < 0 || gpa > 20)) {
                               _showSnack('معدل باید عددی بین ۰ تا ۲۰ باشد.');
                               return;
@@ -343,8 +371,8 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
                             setState(() {
                               _educations.add({
                                 'degree': degree,
-                                'university': universityCtrl.text.trim(),
-                                'major': majorCtrl.text.trim(),
+                                'university': selectedUniversity,
+                                'major': selectedMajor,
                                 'start_year': startYearCtrl.text.trim(),
                                 'end_year': isCurrentlyStudying ? 'در حال تحصیل' : endYearCtrl.text.trim(),
                                 'gpa': gpaCtrl.text.trim(),
@@ -943,6 +971,90 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
     );
   }
 
+  // 🔍 نوار سرچ همراه با منوی پیشنهادات زنده (Autocomplete Dropdown)
+  Widget _buildSkillAutocompleteInput() {
+    final query = _skillController.text.trim().toLowerCase();
+    final suggestions = query.isEmpty
+        ? []
+        : _allSkillsOptions
+        .where((s) => s.toLowerCase().contains(query) && !_skills.contains(s))
+        .toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _skillController,
+                onChanged: (_) => setState(() {}),
+                onSubmitted: (_) => _addSkill(),
+                decoration: _inputDec('جستجوی مهارت (مثال: Flutter, Python)...').copyWith(
+                  suffixIcon: _skillController.text.isNotEmpty
+                      ? IconButton(
+                    icon: const Icon(Icons.clear, size: 16),
+                    onPressed: () {
+                      _skillController.clear();
+                      setState(() {});
+                    },
+                  )
+                      : null,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              onPressed: _addSkill,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF10B981),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('افزودن'),
+            ),
+          ],
+        ),
+
+        // 🔽 منوی پیشنهادات زنده کشویی (Autocomplete Dropdown Menu)
+        if (suggestions.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Container(
+            constraints: const BoxConstraints(maxHeight: 160),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFF1E6AFB)),
+              boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 3))],
+            ),
+            child: ListView.builder(
+              shrinkWrap: true,
+              padding: EdgeInsets.zero,
+              itemCount: suggestions.length,
+              itemBuilder: (context, index) {
+                final suggestion = suggestions[index];
+                return ListTile(
+                  dense: true,
+                  title: Text(suggestion, style: const TextStyle(fontSize: 12, color: Color(0xFF1E293B))),
+                  trailing: const Icon(Icons.add_circle_outline, size: 16, color: Color(0xFF10B981)),
+                  onTap: () {
+                    setState(() {
+                      if (!_skills.contains(suggestion)) {
+                        _skills.add(suggestion);
+                      }
+                      _skillController.clear();
+                    });
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildStep3SkillsAndCourses() {
     return Column(
       children: [
@@ -953,28 +1065,22 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Expanded(child: TextField(controller: _skillController, decoration: _inputDec('مثال: Flutter, Python'))),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: _addSkill,
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981), foregroundColor: Colors.white),
-                    child: const Text('افزودن'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 6,
-                children: _skills.map((s) => Chip(label: Text(s, style: const TextStyle(fontSize: 11)), onDeleted: () => setState(() => _skills.remove(s)))).toList(),
-              ),
+              _buildSkillAutocompleteInput(),
+              const SizedBox(height: 12),
+              if (_skills.isNotEmpty) ...[
+                const Text('مهارت‌های انتخاب‌شده شما:', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  children: _skills.map((s) => Chip(label: Text(s, style: const TextStyle(fontSize: 11)), onDeleted: () => setState(() => _skills.remove(s)))).toList(),
+                ),
+              ],
             ],
           ),
         ),
         const SizedBox(height: 20),
         _buildSectionCard(
-          title: 'دروس و نمرات (سیستم تطبیق هوشمند)',
+          title: 'دروس و نمرات تخصصی (جهت اطلاع کارفرما)',
           icon: Icons.grade_outlined,
           accentColor: const Color(0xFF1E6AFB),
           child: Column(
@@ -1016,7 +1122,6 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
     );
   }
 
-  // 🔹 باکس آپلود ساده و اولیه
   Widget _buildStep4PortfolioAndResume() {
     return Column(
       children: [
@@ -1040,51 +1145,68 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
           title: 'آپلود فایل رزومه (فقط PDF - اختیاری)',
           icon: Icons.upload_file_outlined,
           accentColor: const Color(0xFF10B981),
-          child: InkWell(
-            onTap: _isUploadingResume ? null : _pickAndUploadResume,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: _resumeUserFileName != null ? const Color(0xFFECFDF5) : const Color(0xFFF1F5F9), // کادر موقع انتخاب سبز می‌شود
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: _resumeUserFileName != null ? const Color(0xFF10B981) : const Color(0xFFCBD5E1),
+          child: Column(
+            children: [
+              InkWell(
+                onTap: _isUploadingResume ? null : _pickAndUploadResume,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: _resumeUserFileName != null ? const Color(0xFFECFDF5) : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _resumeUserFileName != null ? const Color(0xFF10B981) : const Color(0xFFCBD5E1)),
+                  ),
+                  child: _isUploadingResume
+                      ? const Column(
+                    children: [
+                      CircularProgressIndicator(color: Color(0xFF1E6AFB)),
+                      SizedBox(height: 8),
+                      Text('در حال آپلود فایل روی سرور...', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                    ],
+                  )
+                      : Column(
+                    children: [
+                      Icon(_resumeUserFileName != null ? Icons.picture_as_pdf : Icons.cloud_upload_outlined, size: 36, color: _resumeUserFileName != null ? const Color(0xFF10B981) : const Color(0xFF1E6AFB)),
+                      const SizedBox(height: 8),
+                      Text(
+                        _resumeUserFileName ?? 'برای انتخاب یا تغییر فایل رزومه (فقط PDF) کلیک کنید',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: _resumeUserFileName != null ? const Color(0xFF047857) : Colors.black54,
+                        ),
+                      ),
+                      if (_resumeUserFileName == null)
+                        const Text('تنها فرمت PDF مجاز است (حداکثر ۱۰ مگابایت)', style: TextStyle(fontSize: 9, color: Colors.grey)),
+                    ],
+                  ),
                 ),
               ),
-              child: _isUploadingResume
-                  ? const Column(
-                children: [
-                  CircularProgressIndicator(color: Color(0xFF1E6AFB)),
-                  SizedBox(height: 8),
-                  Text('در حال آپلود روی سرور...', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                ],
-              )
-                  : Column(
-                children: [
-                  Icon(
-                    _resumeUserFileName != null ? Icons.check_circle : Icons.cloud_upload_outlined,
-                    size: 36,
-                    color: _resumeUserFileName != null ? const Color(0xFF10B981) : const Color(0xFF1E6AFB),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _resumeUserFileName ?? 'برای انتخاب یا تغییر فایل رزومه (فقط PDF) کلیک کنید',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: _resumeUserFileName != null ? const Color(0xFF047857) : Colors.black54,
+              if (_resumeUserFileName != null) ...[
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    TextButton.icon(
+                      onPressed: _pickAndUploadResume,
+                      icon: const Icon(Icons.refresh, size: 16, color: Color(0xFF1E6AFB)),
+                      label: const Text('تعویض و انتخاب فایل جدید', style: TextStyle(fontSize: 11, color: Color(0xFF1E6AFB))),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _resumeUserFileName != null ? 'برای تعویض مجدد کلیک کنید' : 'تنها فرمت PDF مجاز است (حداکثر ۱۰ مگابایت)',
-                    style: TextStyle(fontSize: 9, color: _resumeUserFileName != null ? const Color(0xFF047857) : Colors.grey),
-                  ),
-                ],
-              ),
-            ),
+                    const SizedBox(width: 12),
+                    TextButton.icon(
+                      onPressed: () => setState(() {
+                        _resumeUserFileName = null;
+                        _resumeServerPath = null;
+                      }),
+                      icon: const Icon(Icons.delete_outline, size: 16, color: Colors.redAccent),
+                      label: const Text('حذف فایل', style: TextStyle(fontSize: 11, color: Colors.redAccent)),
+                    ),
+                  ],
+                ),
+              ],
+            ],
           ),
         ),
       ],

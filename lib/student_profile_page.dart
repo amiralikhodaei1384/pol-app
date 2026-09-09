@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:pol_app/api_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pol_app/shamsi_date_picker_dialog.dart';
+
 class StudentProfilePage extends StatefulWidget {
   const StudentProfilePage({super.key});
 
@@ -42,12 +43,18 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
   // پورتفولیو و رزومه
   final _githubController = TextEditingController();
   final _figmaController = TextEditingController();
-  String? _displayResumeName; // نام اصلی فایل جهت نمایش به کاربر
-  String? _resumeServerPath;   // مسیر ذخیره فایل در سرور
+  String? _displayResumeName;
+  String? _resumeServerPath;
 
-  // عبارات منظم جهت اعتبارسنجی
   final _persianRegex = RegExp(r'^[\u0600-\u06FF\s]+$');
   final _phoneRegex = RegExp(r'^09\d{9}$');
+
+  List<String> _allUniversities = ['دانشگاه تهران', 'دانشگاه صنعتی شریف', 'دانشگاه صنعتی امیرکبیر', 'دانشگاه علم و صنعت', 'سایر'];
+  List<String> _allMajors = ['مهندسی کامپیوتر', 'مهندسی برق', 'مهندسی صنایع', 'سایر'];
+  List<String> _allSkillsOptions = [
+    "Flutter", "Dart", "Python", "React", "JavaScript", "SQL", "Figma",
+    "UI/UX", "Django", "FastAPI", "Node.js", "C++", "Java", "Git", "Docker"
+  ];
 
   @override
   void initState() {
@@ -59,6 +66,15 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
     setState(() => _isLoading = true);
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token') ?? '';
+
+    final options = await ApiService.fetchOptions();
+    if (options != null && mounted) {
+      setState(() {
+        if (options['universities'] != null) _allUniversities = (options['universities'] as List).cast<String>();
+        if (options['majors'] != null) _allMajors = (options['majors'] as List).cast<String>();
+        if (options['skills'] != null) _allSkillsOptions = (options['skills'] as List).cast<String>();
+      });
+    }
 
     if (token.isNotEmpty) {
       final userData = await ApiService.getMe(token);
@@ -111,7 +127,6 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
         if (p['resume_file'] != null && p['resume_file'].toString().isNotEmpty) {
           final serverPath = p['resume_file'].toString();
           _resumeServerPath = serverPath;
-          // استخراج نام فایل پی‌دی‌اف از آدرس سرور جهت نمایش
           _displayResumeName = serverPath.split('/').last;
         }
       }
@@ -131,7 +146,6 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
     );
   }
 
-  // انتخاب فقط فایل PDF
   Future<void> _pickAndUploadResume() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -164,8 +178,8 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
 
           if (savedPath != null) {
             setState(() {
-              _displayResumeName = file.name; // نمایش نام اصلی پی‌دی‌اف انتخابی کاربر
-              _resumeServerPath = savedPath;   // آدرس سرور
+              _displayResumeName = file.name;
+              _resumeServerPath = savedPath;
             });
             _showSnack('فایل رزومه PDF با موفقیت ذخیره شد.', isError: false);
           }
@@ -206,8 +220,8 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
 
   void _showAddEducationDialog() {
     String degree = 'کارشناسی';
-    final universityCtrl = TextEditingController();
-    final majorCtrl = TextEditingController();
+    String? selectedUniversity;
+    String? selectedMajor;
     final startYearCtrl = TextEditingController();
     final endYearCtrl = TextEditingController();
     final gpaCtrl = TextEditingController();
@@ -244,18 +258,24 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                         onChanged: (val) => degree = val ?? degree,
                       ),
                       const SizedBox(height: 12),
-                      _buildLabel('نام دانشگاه'),
-                      TextField(
-                        controller: universityCtrl,
-                        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\u0600-\u06FF\s]'))],
-                        decoration: _inputDec('مثال: دانشگاه تهران'),
+                      _buildLabel('نام دانشگاه *'),
+                      DropdownButtonFormField<String>(
+                        value: selectedUniversity,
+                        decoration: _inputDec('انتخاب دانشگاه از لیست'),
+                        items: _allUniversities.map((u) {
+                          return DropdownMenuItem(value: u, child: Text(u, style: const TextStyle(fontSize: 12)));
+                        }).toList(),
+                        onChanged: (val) => setModalState(() => selectedUniversity = val),
                       ),
                       const SizedBox(height: 12),
-                      _buildLabel('رشته تحصیلی'),
-                      TextField(
-                        controller: majorCtrl,
-                        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\u0600-\u06FF\s]'))],
-                        decoration: _inputDec('مثال: مهندسی کامپیوتر'),
+                      _buildLabel('رشته تحصیلی *'),
+                      DropdownButtonFormField<String>(
+                        value: selectedMajor,
+                        decoration: _inputDec('انتخاب رشته تحصیلی'),
+                        items: _allMajors.map((m) {
+                          return DropdownMenuItem(value: m, child: Text(m, style: const TextStyle(fontSize: 12)));
+                        }).toList(),
+                        onChanged: (val) => setModalState(() => selectedMajor = val),
                       ),
                       const SizedBox(height: 12),
                       Row(
@@ -332,11 +352,11 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                         height: 44,
                         child: ElevatedButton(
                           onPressed: () {
-                            final gpa = double.tryParse(gpaCtrl.text.trim());
-                            if (universityCtrl.text.isEmpty || majorCtrl.text.isEmpty) {
-                              _showSnack('نام دانشگاه و رشته تحصیلی الزامی است.');
+                            if (selectedUniversity == null || selectedMajor == null) {
+                              _showSnack('لطفاً دانشگاه و رشته تحصیلی را از منو انتخاب کنید.');
                               return;
                             }
+                            final gpa = double.tryParse(gpaCtrl.text.trim());
                             if (gpa != null && (gpa < 0 || gpa > 20)) {
                               _showSnack('معدل باید عددی بین ۰ تا ۲۰ باشد.');
                               return;
@@ -345,8 +365,8 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                             setState(() {
                               _educations.add({
                                 'degree': degree,
-                                'university': universityCtrl.text.trim(),
-                                'major': majorCtrl.text.trim(),
+                                'university': selectedUniversity,
+                                'major': selectedMajor,
                                 'start_year': startYearCtrl.text.trim(),
                                 'end_year': isCurrentlyStudying ? 'در حال تحصیل' : endYearCtrl.text.trim(),
                                 'gpa': gpaCtrl.text.trim(),
@@ -554,10 +574,93 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
 
     if (success && mounted) {
       _showSnack('تغییرات پروفایل با موفقیت ذخیره شد', isError: false);
-      Navigator.pop(context, true); // بازگشت به داشبورد
+      Navigator.pop(context, true);
     } else if (mounted) {
       _showSnack('خطا در ذخیره تغییرات');
     }
+  }
+
+  // 🔍 منوی سرچ زنده Autocomplete برای مهارت‌ها
+  Widget _buildSkillAutocompleteInput() {
+    final query = _skillInputController.text.trim().toLowerCase();
+    final suggestions = query.isEmpty
+        ? []
+        : _allSkillsOptions
+        .where((s) => s.toLowerCase().contains(query) && !_skills.contains(s))
+        .toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _skillInputController,
+                onChanged: (_) => setState(() {}),
+                onSubmitted: (_) => _addSkill(),
+                decoration: _inputDec('جستجوی مهارت (مثال: Flutter, Python)...').copyWith(
+                  suffixIcon: _skillInputController.text.isNotEmpty
+                      ? IconButton(
+                    icon: const Icon(Icons.clear, size: 16),
+                    onPressed: () {
+                      _skillInputController.clear();
+                      setState(() {});
+                    },
+                  )
+                      : null,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              onPressed: _addSkill,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF10B981),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('افزودن'),
+            ),
+          ],
+        ),
+
+        if (suggestions.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Container(
+            constraints: const BoxConstraints(maxHeight: 160),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFF1E6AFB)),
+              boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 3))],
+            ),
+            child: ListView.builder(
+              shrinkWrap: true,
+              padding: EdgeInsets.zero,
+              itemCount: suggestions.length,
+              itemBuilder: (context, index) {
+                final suggestion = suggestions[index];
+                return ListTile(
+                  dense: true,
+                  title: Text(suggestion, style: const TextStyle(fontSize: 12, color: Color(0xFF1E293B))),
+                  trailing: const Icon(Icons.add_circle_outline, size: 16, color: Color(0xFF10B981)),
+                  onTap: () {
+                    setState(() {
+                      if (!_skills.contains(suggestion)) {
+                        _skills.add(suggestion);
+                      }
+                      _skillInputController.clear();
+                    });
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ],
+    );
   }
 
   @override
@@ -586,7 +689,7 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
               _buildTopHeaderCard(),
               const SizedBox(height: 20),
 
-              // ۱. اطلاعات شناسنامه‌ای و فردی
+              // ۱. اطلاعات شناسنامه‌ای
               _buildSectionContainer(
                 title: 'اطلاعات شناسنامه‌ای و فردی',
                 icon: Icons.person_outline,
@@ -734,33 +837,7 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                 icon: Icons.workspace_premium_outlined,
                 accentColor: const Color(0xFF10B981),
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildMinimalField(
-                          label: 'افزودن مهارت جدید',
-                          controller: _skillInputController,
-                          hint: 'مثال: Flutter, Python, Figma',
-                          icon: Icons.add_task_rounded,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 22.0),
-                        child: ElevatedButton(
-                          onPressed: _addSkill,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF10B981),
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
-                          child: const Text('افزودن'),
-                        ),
-                      ),
-                    ],
-                  ),
+                  _buildSkillAutocompleteInput(),
                   const SizedBox(height: 12),
                   if (_skills.isEmpty)
                     const Text('مهارتی ثبت نشده است.', style: TextStyle(fontSize: 11, color: Colors.grey))

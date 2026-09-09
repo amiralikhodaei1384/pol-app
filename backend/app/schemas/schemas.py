@@ -65,10 +65,9 @@ class ProjectType(str, Enum):
     PROJECT = "پروژه"
 
 class MatchingWeights(BaseModel):
-    university_weight: float = Field(default=0.25, ge=0.0, le=1.0)
-    major_weight: float = Field(default=0.25, ge=0.0, le=1.0)
+    university_weight: float = Field(default=0.35, ge=0.0, le=1.0)
+    major_weight: float = Field(default=0.35, ge=0.0, le=1.0)
     skills_weight: float = Field(default=0.30, ge=0.0, le=1.0)
-    courses_weight: float = Field(default=0.20, ge=0.0, le=1.0)
 
 class ProjectCreate(BaseModel):
     title: str = Field(..., min_length=3, max_length=150)

@@ -22,6 +22,11 @@ MAJORS = [
 ]
 CITIES = ["تهران", "اصفهان", "شیراز", "مشهد", "تبریز", "کرج", "اهواز", "قم", "رشت", "دورکاری"]
 CATEGORIES = ["توسعه نرم‌افزار", "طراحی UI/UX", "دیجیتال مارکتینگ", "هوش مصنوعی و داده", "شبکه و امنیت", "مدیریت و صنایع"]
+SKILLS = [
+    "Flutter", "Dart", "Python", "React", "JavaScript", "SQL", "Figma",
+    "UI/UX", "Django", "FastAPI", "Node.js", "C++", "Java", "Git",
+    "Docker", "هوش مصنوعی / ML", "دیجیتال مارکتینگ", "ICDL / آفیس"
+]
 CHAT_UPLOAD_DIR = "uploads/chat"
 os.makedirs(CHAT_UPLOAD_DIR, exist_ok=True)
 
@@ -50,32 +55,68 @@ async def upload_chat_file(
         "file_type": file_type
     }
 def calculate_match_score(student_profile: models.StudentProfile, project: models.Project) -> int:
-    if not student_profile: return 60
+    if not student_profile:
+        return 50
+
+    # ۱. امتیاز دانشگاه بر اساس اولویت‌های کارفرما
     target_univs = project.target_universities or []
-    univ_score = 100 if (student_profile.university in target_univs) else (75 if not target_univs else 50)
+    if student_profile.university in target_univs:
+        univ_score = 100
+    elif not target_univs:
+        univ_score = 80
+    else:
+        univ_score = 40
+
+    # ۲. امتیاز رشته تحصیلی بر اساس اولویت‌های کارفرما
     target_majors = project.target_majors or []
-    major_score = 100 if (student_profile.major in target_majors) else (75 if not target_majors else 50)
+    if student_profile.major in target_majors:
+        major_score = 100
+    elif not target_majors:
+        major_score = 80
+    else:
+        major_score = 40
 
+    # ۳. امتیاز اشتراک مهارت‌ها
     student_skills = set(student_profile.skills or [])
-    project_skills = set(project.required_skills or [])
-    skills_score = (len(student_skills.intersection(project_skills)) / len(project_skills) * 100) if project_skills else 70
+    required_skills = set(project.required_skills or [])
+    if required_skills:
+        matched_skills = student_skills.intersection(required_skills)
+        skills_score = (len(matched_skills) / len(required_skills)) * 100
+    else:
+        skills_score = 80
 
-    courses = student_profile.courses or []
-    courses_score = (sum(c.get('grade', 15) for c in courses) / len(courses) / 20.0 * 100) if courses else 70
+    # ۴. اعمال وزن‌دهی‌های کارفرما (دانشگاه، رشته، مهارت‌ها)
+    weights = project.weights or {
+        "university_weight": 0.35,
+        "major_weight": 0.35,
+        "skills_weight": 0.30
+    }
 
-    weights = project.weights or {"university_weight": 0.25, "major_weight": 0.25, "skills_weight": 0.30, "courses_weight": 0.20}
-    final_score = (
-            univ_score * weights.get("university_weight", 0.25) +
-            major_score * weights.get("major_weight", 0.25) +
-            skills_score * weights.get("skills_weight", 0.30) +
-            courses_score * weights.get("courses_weight", 0.20)
-    )
-    return max(40, min(98, round(final_score)))
+    u_w = weights.get("university_weight", 0.35)
+    m_w = weights.get("major_weight", 0.35)
+    s_w = weights.get("skills_weight", 0.30)
+    total_w = u_w + m_w + s_w if (u_w + m_w + s_w) > 0 else 1.0
+
+    base_score = (univ_score * u_w + major_score * m_w + skills_score * s_w) / total_w
+
+    # ۵. 🌟 پاداش داشتن سابقه کاری مرتبط (امتیاز مثبت +۱۰٪)
+    work_experiences = student_profile.work_experiences or []
+    work_bonus = 10 if len(work_experiences) > 0 else 0
+
+    final_score = base_score + work_bonus
+
+    return max(35, min(98, round(final_score)))
 
 # ۱. دریافت گزینه‌های فرم‌ها
 @router.get("/options")
 def get_options():
-    return {"universities": UNIVERSITIES, "majors": MAJORS, "cities": CITIES, "categories": CATEGORIES}
+    return {
+        "universities": UNIVERSITIES,
+        "majors": MAJORS,
+        "skills": SKILLS, # <--- ارسال مهارت‌های استاندارد به فلاتر
+        "cities": CITIES,
+        "categories": CATEGORIES
+    }
 
 # ۲. پروژه‌های پیشنهادی دانشجو
 @router.get("/recommended")

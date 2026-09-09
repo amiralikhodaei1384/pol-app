@@ -19,24 +19,32 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _skillInputController = TextEditingController();
+  final TextEditingController _univInputController = TextEditingController();
+  final TextEditingController _majorInputController = TextEditingController();
 
-  // Form State (بدون پیش‌فرض‌های هاردکد شده)
+  // Form State
   String? _selectedProjectType; // پروژه / کارآموزی / امریه
   String? _selectedCity;
   String? _selectedCategory;
 
   List<String> _selectedUniversities = [];
   List<String> _selectedMajors = [];
+  final List<String> _skillsList = [];
 
   List<String> _cities = ['تهران', 'اصفهان', 'شیراز', 'مشهد', 'تبریز', 'کرج', 'اهواز', 'قم', 'رشت', 'دورکاری'];
   List<String> _categories = ['توسعه نرم‌افزار', 'طراحی UI/UX', 'دیجیتال مارکتینگ', 'هوش مصنوعی و داده', 'شبکه و امنیت', 'مدیریت و صنایع'];
   List<String> _allUniversities = ['دانشگاه تهران', 'دانشگاه صنعتی شریف', 'دانشگاه صنعتی امیرکبیر', 'دانشگاه علم و صنعت', 'دانشگاه شهید بهشتی', 'سایر'];
   List<String> _allMajors = ['مهندسی کامپیوتر', 'مهندسی برق', 'مهندسی صنایع', 'مهندسی مکانیک', 'علوم کامپیوتر', 'سایر'];
+  List<String> _allSkillsOptions = ["Flutter", "Dart", "Python", "React", "JavaScript", "SQL", "Figma", "UI/UX", "Django", "FastAPI", "Node.js", "C++", "Java", "Git", "Docker"];
 
-  final List<String> _skillsList = [];
   String? _selectedDeadline; // تاریخ شمسی
   bool _requiresInterview = true;
   bool _isLoading = false;
+
+  // Matching Weights (دانشگاه، رشته، مهارت‌ها)
+  double _univWeight = 0.35;
+  double _majorWeight = 0.35;
+  double _skillsWeight = 0.30;
 
   @override
   void initState() {
@@ -52,6 +60,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
         if (opts['categories'] != null) _categories = (opts['categories'] as List).cast<String>();
         if (opts['universities'] != null) _allUniversities = (opts['universities'] as List).cast<String>();
         if (opts['majors'] != null) _allMajors = (opts['majors'] as List).cast<String>();
+        if (opts['skills'] != null) _allSkillsOptions = (opts['skills'] as List).cast<String>();
       });
     }
   }
@@ -61,11 +70,14 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
     _titleController.dispose();
     _descriptionController.dispose();
     _skillInputController.dispose();
+    _univInputController.dispose();
+    _majorInputController.dispose();
     super.dispose();
   }
 
-  void _addSkill() {
-    final text = _skillInputController.text.trim();
+  // توابع کمکی افزودن و حذف
+  void _addSkill([String? customSkill]) {
+    final text = customSkill ?? _skillInputController.text.trim();
     if (text.isNotEmpty && !_skillsList.contains(text)) {
       setState(() {
         _skillsList.add(text);
@@ -77,6 +89,38 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
   void _removeSkill(String skill) {
     setState(() {
       _skillsList.remove(skill);
+    });
+  }
+
+  void _addUniversity([String? customUni]) {
+    final text = customUni ?? _univInputController.text.trim();
+    if (text.isNotEmpty && !_selectedUniversities.contains(text)) {
+      setState(() {
+        _selectedUniversities.add(text);
+        _univInputController.clear();
+      });
+    }
+  }
+
+  void _removeUniversity(String university) {
+    setState(() {
+      _selectedUniversities.remove(university);
+    });
+  }
+
+  void _addMajor([String? customMajor]) {
+    final text = customMajor ?? _majorInputController.text.trim();
+    if (text.isNotEmpty && !_selectedMajors.contains(text)) {
+      setState(() {
+        _selectedMajors.add(text);
+        _majorInputController.clear();
+      });
+    }
+  }
+
+  void _removeMajor(String major) {
+    setState(() {
+      _selectedMajors.remove(major);
     });
   }
 
@@ -98,15 +142,11 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
   }
 
   Future<void> _submitProject() async {
-    // ۱. اگر متنی در کادر مهارت مانده، خودکار اضافه کن
-    if (_skillInputController.text.trim().isNotEmpty) {
-      _addSkill();
-    }
+    if (_skillInputController.text.trim().isNotEmpty) _addSkill();
+    if (_univInputController.text.trim().isNotEmpty) _addUniversity();
+    if (_majorInputController.text.trim().isNotEmpty) _addMajor();
 
-    // ۲. اعتبارسنجی ورودی‌های فرم سمت فرانت‌اند
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
     if (_selectedProjectType == null) {
       _showSnack('لطفاً «نوع همکاری» را انتخاب کنید.');
@@ -124,7 +164,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
     }
 
     if (_skillsList.isEmpty) {
-      _showSnack('لطفاً حداقل یک مهارت وارد کرده و دکمه افزودن را بزنید.');
+      _showSnack('لطفاً حداقل یک مهارت انتخاب کرده یا اضافه کنید.');
       return;
     }
 
@@ -158,13 +198,18 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
           'target_universities': _selectedUniversities,
           'target_majors': _selectedMajors,
           'requires_interview': _requiresInterview,
+          'weights': {
+            'university_weight': _univWeight,
+            'major_weight': _majorWeight,
+            'skills_weight': _skillsWeight,
+          }
         }),
       ).timeout(const Duration(seconds: 10));
 
       if (!mounted) return;
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        Navigator.pop(context, true); // ثبت موفق
+        Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('فرصت شغلی با موفقیت ایجاد شد.'),
@@ -172,7 +217,6 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
           ),
         );
       } else {
-        // ۳. مدیریت هوشمند خطاهای بک‌اند (از جمله ارور ۴۲۲)
         _handleBackendError(response);
       }
     } catch (e) {
@@ -184,18 +228,13 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
     }
   }
 
-  // موتور مدیریت و ترجمه خطاهای سرور (HTTP Errors & 422 Unprocessable Entity)
   void _handleBackendError(http.Response response) {
     String errorMessage = 'خطایی در ثبت اطلاعات رخ داد.';
-
     try {
       final err = jsonDecode(response.body);
-
-      // پارس کردن ارور ۴۲۲ اعتبارسنجی فست‌پی‌آی
       if (response.statusCode == 422 && err['detail'] is List) {
         final List details = err['detail'];
         List<String> parsedErrors = [];
-
         for (var item in details) {
           if (item is Map) {
             final loc = item['loc'] as List?;
@@ -205,29 +244,16 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
               parsedErrors.add('• عنوان پروژه بسیار کوتاه است (حداقل ۳ کاراکتر).');
             } else if (field == 'description') {
               parsedErrors.add('• شرح وظایف بسیار کوتاه است (حداقل ۱۰ کاراکتر).');
-            } else if (field == 'required_skills') {
-              parsedErrors.add('• مهارت‌های وارد شده معتبر نیستند.');
-            } else if (field == 'deadline') {
-              parsedErrors.add('• فرمت تاریخ مهلت نامعتبر است.');
             } else {
               parsedErrors.add('• ${item['msg'] ?? 'اطلاعات وارد شده معتبر نیست.'}');
             }
           }
         }
-        if (parsedErrors.isNotEmpty) {
-          errorMessage = parsedErrors.join('\n');
-        }
+        if (parsedErrors.isNotEmpty) errorMessage = parsedErrors.join('\n');
       } else if (err['detail'] is String) {
         errorMessage = err['detail'];
-      } else if (response.statusCode == 401) {
-        errorMessage = 'نشست کاری شما منقضی شده است. لطفاً دوباره وارد شوید.';
-      } else if (response.statusCode == 403) {
-        errorMessage = 'شما دسترسی لازم برای انجام این کار را ندارید.';
-      } else if (response.statusCode >= 500) {
-        errorMessage = 'خطای داخلی سرور. لطفاً بعداً دوباره تلاش کنید.';
       }
     } catch (_) {}
-
     _showSnack(errorMessage);
   }
 
@@ -237,6 +263,152 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
         content: Text(message),
         backgroundColor: Colors.orangeAccent,
       ),
+    );
+  }
+
+  // 🔍 ویجت چندمنظوره نوار سرچ زنده با کشوی پیشنهادات
+  Widget _buildAutocompleteSearchInput({
+    required String label,
+    required String hint,
+    required TextEditingController controller,
+    required List<String> allOptions,
+    required List<String> selectedList,
+    required Function(String) onAdd,
+    required Function(String) onRemove,
+    required Color chipColor,
+  }) {
+    final query = controller.text.trim().toLowerCase();
+    final suggestions = query.isEmpty
+        ? []
+        : allOptions
+        .where((opt) => opt.toLowerCase().contains(query) && !selectedList.contains(opt))
+        .toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: controller,
+                onChanged: (_) => setState(() {}),
+                onSubmitted: (val) {
+                  if (val.trim().isNotEmpty) {
+                    onAdd(val.trim());
+                    controller.clear();
+                    setState(() {});
+                  }
+                },
+                style: const TextStyle(fontSize: 12),
+                decoration: _inputDecoration(hint).copyWith(
+                  suffixIcon: controller.text.isNotEmpty
+                      ? IconButton(
+                    icon: const Icon(Icons.clear, size: 16),
+                    onPressed: () {
+                      controller.clear();
+                      setState(() {});
+                    },
+                  )
+                      : null,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              onPressed: () {
+                if (controller.text.trim().isNotEmpty) {
+                  onAdd(controller.text.trim());
+                  controller.clear();
+                  setState(() {});
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1E6AFB),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('افزودن'),
+            ),
+          ],
+        ),
+
+        // 🔽 کشوی پیشنهادات زنده متناسب با تایپ
+        if (suggestions.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Container(
+            constraints: const BoxConstraints(maxHeight: 140),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFF1E6AFB)),
+              boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 3))],
+            ),
+            child: ListView.builder(
+              shrinkWrap: true,
+              padding: EdgeInsets.zero,
+              itemCount: suggestions.length,
+              itemBuilder: (context, index) {
+                final suggestion = suggestions[index];
+                return ListTile(
+                  dense: true,
+                  title: Text(suggestion, style: const TextStyle(fontSize: 12, color: Color(0xFF1E293B))),
+                  trailing: const Icon(Icons.add_circle_outline, size: 16, color: Color(0xFF10B981)),
+                  onTap: () {
+                    setState(() {
+                      onAdd(suggestion);
+                      controller.clear();
+                    });
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+
+        // 🏷️ برچسب‌های انتخابی
+        if (selectedList.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: selectedList.map((item) {
+              return Chip(
+                label: Text(item, style: const TextStyle(fontSize: 11)),
+                backgroundColor: chipColor.withOpacity(0.15),
+                deleteIcon: const Icon(Icons.close, size: 14),
+                onDeleted: () => onRemove(item),
+              );
+            }).toList(),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildWeightSlider(String label, double value, ValueChanged<double> onChanged) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(label, style: const TextStyle(fontSize: 11)),
+            Text('${(value * 100).round()}٪', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF1E6AFB))),
+          ],
+        ),
+        Slider(
+          value: value,
+          min: 0.0,
+          max: 1.0,
+          divisions: 20,
+          activeColor: const Color(0xFF1E6AFB),
+          onChanged: onChanged,
+        ),
+      ],
     );
   }
 
@@ -357,59 +529,46 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                         ),
                         const SizedBox(height: 16),
 
-                        // ۴. دانشگاه‌های مورد قبول (چند انتخابی)
-                        const Text('دانشگاه‌های اولویت‌دار (اختیاری):', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 6),
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 4,
-                          children: _allUniversities.map((u) {
-                            final isSel = _selectedUniversities.contains(u);
-                            return FilterChip(
-                              label: Text(u, style: TextStyle(fontSize: 10, color: isSel ? Colors.white : Colors.black87)),
-                              selected: isSel,
-                              selectedColor: const Color(0xFF1E6AFB),
-                              onSelected: (selected) {
-                                setState(() {
-                                  if (selected) {
-                                    _selectedUniversities.add(u);
-                                  } else {
-                                    _selectedUniversities.remove(u);
-                                  }
-                                });
-                              },
-                            );
-                          }).toList(),
+                        // ۴. دانشگاه‌های اولویت‌دار
+                        _buildAutocompleteSearchInput(
+                          label: 'دانشگاه‌های اولویت‌دار (اختیاری)',
+                          hint: 'جستجوی دانشگاه (مثال: تهران، شریف)...',
+                          controller: _univInputController,
+                          allOptions: _allUniversities,
+                          selectedList: _selectedUniversities,
+                          onAdd: _addUniversity,
+                          onRemove: _removeUniversity,
+                          chipColor: const Color(0xFF1E6AFB),
                         ),
                         const SizedBox(height: 16),
 
-                        // ۵. رشته‌های مرتبط (چند انتخابی)
-                        const Text('رشته‌های تحصیلی مرتبط (اختیاری):', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 6),
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 4,
-                          children: _allMajors.map((m) {
-                            final isSel = _selectedMajors.contains(m);
-                            return FilterChip(
-                              label: Text(m, style: TextStyle(fontSize: 10, color: isSel ? Colors.white : Colors.black87)),
-                              selected: isSel,
-                              selectedColor: const Color(0xFF10B981),
-                              onSelected: (selected) {
-                                setState(() {
-                                  if (selected) {
-                                    _selectedMajors.add(m);
-                                  } else {
-                                    _selectedMajors.remove(m);
-                                  }
-                                });
-                              },
-                            );
-                          }).toList(),
+                        // ۵. رشته‌های مرتبط
+                        _buildAutocompleteSearchInput(
+                          label: 'رشته‌های تحصیلی مرتبط (اختیاری)',
+                          hint: 'جستجوی رشته (مثال: کامپیوتر، برق)...',
+                          controller: _majorInputController,
+                          allOptions: _allMajors,
+                          selectedList: _selectedMajors,
+                          onAdd: _addMajor,
+                          onRemove: _removeMajor,
+                          chipColor: const Color(0xFF10B981),
                         ),
                         const SizedBox(height: 16),
 
-                        // ۶. مهلت ارسال درخواست
+                        // ۶. مهارت‌های مورد نیاز
+                        _buildAutocompleteSearchInput(
+                          label: 'مهارت‌های مورد نیاز *',
+                          hint: 'جستجوی مهارت (مثال: Flutter, Python)...',
+                          controller: _skillInputController,
+                          allOptions: _allSkillsOptions,
+                          selectedList: _skillsList,
+                          onAdd: _addSkill,
+                          onRemove: _removeSkill,
+                          chipColor: const Color(0xFF1E6AFB),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // ۷. مهلت ارسال درخواست
                         const Text('مهلت ارسال درخواست *', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 6),
                         InkWell(
@@ -439,7 +598,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                         ),
                         const SizedBox(height: 16),
 
-                        // ۷. شرح وظایف
+                        // ۸. شرح وظایف
                         const Text('شرح وظایف و خروجی مورد انتظار * (حداقل ۱۰ کاراکتر)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 6),
                         TextFormField(
@@ -458,46 +617,6 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                         ),
                         const SizedBox(height: 16),
 
-                        // ۸. مهارت‌های مورد نیاز
-                        const Text('مهارت‌های مورد نیاز *', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextFormField(
-                                controller: _skillInputController,
-                                decoration: _inputDecoration('مثال: Flutter, Python, Figma'),
-                                onFieldSubmitted: (_) => _addSkill(),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            ElevatedButton(
-                              onPressed: _addSkill,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF1E6AFB),
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              ),
-                              child: const Text('افزودن'),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: _skillsList.map((skill) {
-                            return Chip(
-                              label: Text(skill, style: const TextStyle(fontSize: 11)),
-                              backgroundColor: const Color(0xFFE3F2FD),
-                              deleteIcon: const Icon(Icons.close, size: 14),
-                              onDeleted: () => _removeSkill(skill),
-                            );
-                          }).toList(),
-                        ),
-                        const SizedBox(height: 16),
-
                         // ۹. نیازمند مصاحبه
                         SwitchListTile(
                           value: _requiresInterview,
@@ -506,6 +625,19 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                           title: const Text('نیازمند مصاحبه / ملاقات حضوری', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                           subtitle: const Text('پس از تایید اولیه، زمان ملاقات حضوری تعیین خواهد شد.', style: TextStyle(fontSize: 10, color: Colors.grey)),
                           onChanged: (val) => setState(() => _requiresInterview = val),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // ۱۰. تنظیم وزن‌دهی
+                        ExpansionTile(
+                          title: const Text('وزن‌دهی تطبیق هوشمند (اختیاری)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1E6AFB))),
+                          subtitle: const Text('تنظیم میزان اهمیت دانشگاه، رشته و مهارت‌ها در رتبه‌بندی دانشجو', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                          childrenPadding: const EdgeInsets.all(8),
+                          children: [
+                            _buildWeightSlider('میزان اهمیت دانشگاه', _univWeight, (val) => setState(() => _univWeight = val)),
+                            _buildWeightSlider('میزان اهمیت رشته تحصیلی', _majorWeight, (val) => setState(() => _majorWeight = val)),
+                            _buildWeightSlider('میزان اهمیت مهارت‌ها', _skillsWeight, (val) => setState(() => _skillsWeight = val)),
+                          ],
                         ),
                       ],
                     ),
