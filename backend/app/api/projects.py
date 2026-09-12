@@ -342,6 +342,9 @@ def get_all_projects(
 
         result.append(p_dict)
 
+    # 🎯 مرتب‌سازی نزولی لیست بر اساس بیشترین درصد تطابق (از بالاترین درصد به پایین‌ترین)
+    result.sort(key=lambda x: x["match_score"], reverse=True)
+
     return result
 
 # ۷. ثبت پروژه جدید کارفرما
