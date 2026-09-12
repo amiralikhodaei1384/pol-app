@@ -54,23 +54,44 @@ async def upload_chat_file(
         "file_name": file.filename,
         "file_type": file_type
     }
+# 🧠 تابع جدید تطبیق هوشمند (با احتساب ترتیب اولویت دانشگاه/رشته و وزن‌های کارفرما)
 def calculate_match_score(student_profile: models.StudentProfile, project: models.Project) -> int:
     if not student_profile:
         return 50
 
-    # ۱. امتیاز دانشگاه بر اساس اولویت‌های کارفرما
+    # ۱. محاسبه امتیاز دانشگاه با توجه به ترتیب اولویت (رتبه ۱، ۲ یا ۳ بودن)
     target_univs = project.target_universities or []
-    if student_profile.university in target_univs:
-        univ_score = 100
-    elif not target_univs:
-        univ_score = 80
-    else:
-        univ_score = 40
+    student_univ = student_profile.university
 
-    # ۲. امتیاز رشته تحصیلی بر اساس اولویت‌های کارفرما
+    if student_univ and student_univ in target_univs:
+        rank = target_univs.index(student_univ) # رتبه انتخابی (0 یعنی اولویت اول)
+        if rank == 0:
+            univ_score = 100 # اولویت اول
+        elif rank == 1:
+            univ_score = 85  # اولویت دوم
+        elif rank == 2:
+            univ_score = 70  # اولویت سوم
+        else:
+            univ_score = 60  # اولویت‌های بعدی
+    elif not target_univs:
+        univ_score = 80  # کارفرما هیچ شرط دانشگاهی نگذاشته است
+    else:
+        univ_score = 40  # دانشگاه دانشجو در لیست اولویت‌های کارفرما نیست
+
+    # ۲. محاسبه امتیاز رشته تحصیلی با توجه به ترتیب اولویت
     target_majors = project.target_majors or []
-    if student_profile.major in target_majors:
-        major_score = 100
+    student_major = student_profile.major
+
+    if student_major and student_major in target_majors:
+        rank = target_majors.index(student_major)
+        if rank == 0:
+            major_score = 100 # اولویت اول
+        elif rank == 1:
+            major_score = 85  # اولویت دوم
+        elif rank == 2:
+            major_score = 70  # اولویت سوم
+        else:
+            major_score = 60
     elif not target_majors:
         major_score = 80
     else:
@@ -85,21 +106,21 @@ def calculate_match_score(student_profile: models.StudentProfile, project: model
     else:
         skills_score = 80
 
-    # ۴. اعمال وزن‌دهی‌های کارفرما (دانشگاه، رشته، مهارت‌ها)
+    # ۴. اعمال اسلایدرها و وزن‌های اختصاصی تعیین‌شده توسط کارفرما
     weights = project.weights or {
         "university_weight": 0.35,
         "major_weight": 0.35,
         "skills_weight": 0.30
     }
 
-    u_w = weights.get("university_weight", 0.35)
-    m_w = weights.get("major_weight", 0.35)
-    s_w = weights.get("skills_weight", 0.30)
-    total_w = u_w + m_w + s_w if (u_w + m_w + s_w) > 0 else 1.0
+    w_univ = weights.get("university_weight", 0.35)
+    w_major = weights.get("major_weight", 0.35)
+    w_skills = weights.get("skills_weight", 0.30)
+    total_w = w_univ + w_major + w_skills if (w_univ + w_major + w_skills) > 0 else 1.0
 
-    base_score = (univ_score * u_w + major_score * m_w + skills_score * s_w) / total_w
+    base_score = (univ_score * w_univ + major_score * w_major + skills_score * w_skills) / total_w
 
-    # ۵. 🌟 پاداش داشتن سابقه کاری مرتبط (امتیاز مثبت +۱۰٪)
+    # ۵. پاداش سابقه کاری دانشجو (+۱۰ امتیاز)
     work_experiences = student_profile.work_experiences or []
     work_bonus = 10 if len(work_experiences) > 0 else 0
 
