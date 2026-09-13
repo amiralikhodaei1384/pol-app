@@ -4,15 +4,15 @@ import 'login_page.dart';
 import 'dashboard_page.dart';
 
 void main() async {
-  // اطمینان از مقداردهی اولیه فلاتر قبل از فراخوانی shared_preferences
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const PolApp());
 }
 
+/// Root widget that opens the login page or the dashboard based on the saved session.
 class PolApp extends StatelessWidget {
   const PolApp({super.key});
 
-  // بررسی وضعیت ورود کاربر از حافظه دستگاه
+  /// Reads the saved token and role from local storage.
   Future<Map<String, dynamic>> _checkAuthStatus() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token');
@@ -42,7 +42,6 @@ class PolApp extends StatelessWidget {
       home: FutureBuilder<Map<String, dynamic>>(
         future: _checkAuthStatus(),
         builder: (context, snapshot) {
-          // در حال بررسی وضعیت ورود (نمایش صفحه لودینگ)
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Scaffold(
               backgroundColor: Color(0xFFF8FAFC),
@@ -52,12 +51,10 @@ class PolApp extends StatelessWidget {
             );
           }
 
-          // اگر لاگین کرده بود -> هدایت به داشبورد مربوطه
           if (snapshot.hasData && snapshot.data!['isLoggedIn'] == true) {
             return DashboardPage(isCompany: snapshot.data!['isCompany']);
           }
 
-          // در غیر این صورت -> صفحه ورود
           return const LoginPage();
         },
       ),

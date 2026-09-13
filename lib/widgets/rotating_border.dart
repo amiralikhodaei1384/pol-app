@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 
+/// Wraps a child with an animated rotating gradient border.
 class RotatingGradientBorder extends StatefulWidget {
   final Widget child;
   final double borderRadius;
@@ -75,9 +76,9 @@ class _GradientPainter extends CustomPainter {
     final paint = Paint()
       ..shader = SweepGradient(
         colors: const [
-          Color(0xFF0072FF), // آبی
-          Color(0xFF10B981), // سبز
-          Color(0xFF0072FF), // آبی
+          Color(0xFF0072FF),
+          Color(0xFF10B981),
+          Color(0xFF0072FF),
         ],
         stops: const [0.0, 0.5, 1.0],
         transform: GradientRotation(angle),

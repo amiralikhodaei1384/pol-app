@@ -3,6 +3,7 @@ import 'package:pol_app/api_service.dart';
 import 'package:pol_app/project_details_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Project search with multi-select filters.
 class ExploreProjectsPage extends StatefulWidget {
   const ExploreProjectsPage({super.key});
 
@@ -86,7 +87,7 @@ class _ExploreProjectsPageState extends State<ExploreProjectsPage> {
     _loadProjects();
   }
 
-  // دیالوگ هوشمند انتخاب چندتایی دارای نوار سرچ زنده
+  /// Bottom sheet for choosing several filter values with live search.
   void _showMultiSelectModal({
     required String title,
     required List<String> options,
@@ -103,7 +104,6 @@ class _ExploreProjectsPageState extends State<ExploreProjectsPage> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            // فیلتر زنده گزینه‌ها متناسب با تایپ کاربر
             final query = modalSearchCtrl.text.trim();
             final filteredOptions = query.isEmpty
                 ? options
@@ -116,7 +116,6 @@ class _ExploreProjectsPageState extends State<ExploreProjectsPage> {
                 textDirection: TextDirection.rtl,
                 child: Column(
                   children: [
-                    // هدر مدال
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -126,11 +125,10 @@ class _ExploreProjectsPageState extends State<ExploreProjectsPage> {
                     ),
                     const SizedBox(height: 8),
 
-                    // 🔎 نوار جستجوی زنده درون مدال (با تایپ «ت» شهرها زنده فیلتر می‌شوند)
                     TextField(
                       controller: modalSearchCtrl,
                       onChanged: (_) {
-                        setModalState(() {}); // به‌روزرسانی آنی لیست
+                        setModalState(() {});
                       },
                       style: const TextStyle(fontSize: 12),
                       decoration: InputDecoration(
@@ -155,7 +153,6 @@ class _ExploreProjectsPageState extends State<ExploreProjectsPage> {
                     const SizedBox(height: 12),
                     const Divider(height: 1),
 
-                    // لیست گزینه‌های فیلترشده
                     Expanded(
                       child: filteredOptions.isEmpty
                           ? const Center(child: Text('هیچ گزینه‌ای پیدا نشد.', style: TextStyle(color: Colors.grey, fontSize: 12)))
@@ -213,7 +210,6 @@ class _ExploreProjectsPageState extends State<ExploreProjectsPage> {
     );
   }
 
-  // مدال انتخاب نوع همکاری
   void _showTypeSelectModal() {
     showModalBottomSheet(
       context: context,
@@ -281,14 +277,12 @@ class _ExploreProjectsPageState extends State<ExploreProjectsPage> {
         ),
         body: Column(
           children: [
-            // باکس سرچ و ۵ دکمه فیلتر کشیده شده که ۱۰۰٪ عرض را پر می‌کنند
             Container(
               color: Colors.white,
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // نوار سرچ اصلی
                   TextField(
                     controller: _searchController,
                     onChanged: (_) => _loadProjects(),
@@ -314,7 +308,6 @@ class _ExploreProjectsPageState extends State<ExploreProjectsPage> {
                   ),
                   const SizedBox(height: 12),
 
-                  // 📏 ۵ دکمه فیلتر کشیده شده که جمعاً کل عرض صفحه را پر می‌کنند
                   Row(
                     children: [
                       Expanded(
@@ -396,7 +389,6 @@ class _ExploreProjectsPageState extends State<ExploreProjectsPage> {
 
             const Divider(height: 1, color: Color(0xFFE2E8F0)),
 
-            // لیست پروژه‌های فیلترشده
             Expanded(
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator(color: Color(0xFF1E6AFB)))

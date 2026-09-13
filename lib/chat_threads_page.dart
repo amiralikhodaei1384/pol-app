@@ -3,6 +3,7 @@ import 'package:pol_app/api_service.dart';
 import 'package:pol_app/chat_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Lists the user's chat conversations.
 class ChatThreadsPage extends StatefulWidget {
   const ChatThreadsPage({super.key});
 

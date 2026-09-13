@@ -5,6 +5,7 @@ import 'package:pol_app/dashboard_page.dart';
 import 'package:pol_app/employer_applications_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Lists the user's notifications.
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
 
@@ -41,16 +42,15 @@ class _NotificationsPageState extends State<NotificationsPage> {
     final token = prefs.getString('access_token') ?? '';
     final ok = await ApiService.deleteNotification(token, notifId);
     if (ok) {
-      _loadNotifications(); // رفرش لیست نوتیفیکیشن‌ها
+      _loadNotifications();
     }
   }
-  // 🔗 موتور کلیک و انتقال هوشمند به صفحه مربوطه (Deep Linking)
+  /// Opens the screen related to the tapped notification.
   void _handleNotificationTap(dynamic notif) {
     final type = notif['type'] ?? 'general';
     final linkId = notif['link_id']?.toString();
 
     if (type == 'chat' && linkId != null && linkId.isNotEmpty) {
-      // ۱. انتقال مستقیم به صفحه همان چت
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -58,7 +58,6 @@ class _NotificationsPageState extends State<NotificationsPage> {
         ),
       );
     } else if (type == 'application' && linkId != null && linkId.isNotEmpty) {
-      // ۲. انتقال کارفرما به لیست رزومه‌های همان پروژه خاص
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -68,7 +67,6 @@ class _NotificationsPageState extends State<NotificationsPage> {
         ),
       );
     } else if (type == 'interview') {
-      // ۳. انتقال دانشجو به داشبورد و مشاهده باکس مصاحبه حضوری
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
@@ -77,7 +75,6 @@ class _NotificationsPageState extends State<NotificationsPage> {
             (route) => false,
       );
     } else {
-      // پیام عمومی
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(notif['message'] ?? '')),
       );

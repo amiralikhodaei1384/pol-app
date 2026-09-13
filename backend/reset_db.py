@@ -1,7 +1,6 @@
 import os
 import sys
 
-# افزودن مسیر اصلی برنامه برای ایمپورت‌ها
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from app.db.session import engine, SessionLocal
@@ -10,6 +9,7 @@ from app.models import models
 from app.core import security
 
 def reset_and_seed_db():
+    """Drop and recreate all tables, then insert test users."""
     print("🔄 در حال پاک‌سازی جداول قدیمی...")
     Base.metadata.drop_all(bind=engine)
     print("✅ تمامی جداول قدیمی پاک شدند.")
@@ -20,12 +20,8 @@ def reset_and_seed_db():
 
     db = SessionLocal()
     try:
-        # هش کردن رمز عبور مشترک برای تست
         common_password = security.get_password_hash("amir")
 
-        # -----------------------------------------------
-        # ۱. ساخت کاربر دانشجو
-        # -----------------------------------------------
         print("👤 در حال ساخت کاربر دانشجو...")
         student_user = models.User(
             email="amir@gmail.com",
@@ -42,9 +38,6 @@ def reset_and_seed_db():
         )
         db.add(student_profile)
 
-        # -----------------------------------------------
-        # ۲. ساخت کاربر کارفرما و شرکت
-        # -----------------------------------------------
         print("🏢 در حال ساخت کاربر کارفرما و شرکت...")
         company_user = models.User(
             email="psp@gmail.com",

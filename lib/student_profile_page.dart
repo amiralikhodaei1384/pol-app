@@ -1,3 +1,5 @@
+import 'dart:io' show File;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
@@ -5,6 +7,7 @@ import 'package:pol_app/api_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pol_app/shamsi_date_picker_dialog.dart';
 
+/// Student profile editor.
 class StudentProfilePage extends StatefulWidget {
   const StudentProfilePage({super.key});
 
@@ -17,7 +20,6 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
   bool _isSaving = false;
   bool _isUploadingResume = false;
 
-  // ۱. اطلاعات فردی و شناسنامه‌ای
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -25,22 +27,17 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
   final _residenceController = TextEditingController();
   final _birthPlaceController = TextEditingController();
 
-  // سوابق تحصیلی
   final List<Map<String, dynamic>> _educations = [];
 
-  // سوابق کاری
   final List<Map<String, dynamic>> _workExperiences = [];
 
-  // مهارت‌ها
   final _skillInputController = TextEditingController();
   List<String> _skills = [];
 
-  // دروس و نمره‌ها
   final _courseNameController = TextEditingController();
   final _courseGradeController = TextEditingController();
   List<Map<String, dynamic>> _courses = [];
 
-  // پورتفولیو و رزومه
   final _githubController = TextEditingController();
   final _figmaController = TextEditingController();
   String? _displayResumeName;
@@ -146,6 +143,7 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
     );
   }
 
+  /// Picks a PDF resume and uploads it.
   Future<void> _pickAndUploadResume() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -162,15 +160,23 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
           return;
         }
 
-        if (file.bytes != null) {
-          setState(() => _isUploadingResume = true);
+        List<int>? fileBytes = file.bytes;
+        if (fileBytes == null && !kIsWeb && file.path != null) {
+          fileBytes = await File(file.path!).readAsBytes();
+        }
+
+        if (fileBytes != null && fileBytes.isNotEmpty) {
+          setState(() {
+            _isUploadingResume = true;
+            _displayResumeName = file.name;
+          });
 
           final prefs = await SharedPreferences.getInstance();
           final token = prefs.getString('access_token') ?? '';
 
           final savedPath = await ApiService.uploadResume(
             token: token,
-            fileBytes: file.bytes!,
+            fileBytes: fileBytes,
             fileName: file.name,
           );
 
@@ -178,7 +184,6 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
 
           if (savedPath != null) {
             setState(() {
-              _displayResumeName = file.name;
               _resumeServerPath = savedPath;
             });
             _showSnack('فایل رزومه PDF با موفقیت ذخیره شد.', isError: false);
@@ -353,7 +358,7 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                         child: ElevatedButton(
                           onPressed: () {
                             if (selectedUniversity == null || selectedMajor == null) {
-                              _showSnack('لطفاً دانشگاه و رشته تحصیلی را از منو انتخاب کنید.');
+                              _showSnack('لطفاً دانشگاه و رشته تحصیلی را از لیست انتخاب کنید.');
                               return;
                             }
                             final gpa = double.tryParse(gpaCtrl.text.trim());
@@ -524,6 +529,7 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
     );
   }
 
+  /// Saves profile changes to the backend.
   Future<void> _saveChanges() async {
     final firstName = _firstNameController.text.trim();
     final lastName = _lastNameController.text.trim();
@@ -580,7 +586,6 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
     }
   }
 
-  // 🔍 منوی سرچ زنده Autocomplete برای مهارت‌ها
   Widget _buildSkillAutocompleteInput() {
     final query = _skillInputController.text.trim().toLowerCase();
     final suggestions = query.isEmpty
@@ -689,7 +694,6 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
               _buildTopHeaderCard(),
               const SizedBox(height: 20),
 
-              // ۱. اطلاعات شناسنامه‌ای
               _buildSectionContainer(
                 title: 'اطلاعات شناسنامه‌ای و فردی',
                 icon: Icons.person_outline,
@@ -787,7 +791,6 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
               ),
               const SizedBox(height: 20),
 
-              // ۲. سوابق تحصیلی
               _buildSectionContainer(
                 title: 'سوابق تحصیلی و دانشگاهی',
                 icon: Icons.school_outlined,
@@ -809,7 +812,6 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
               ),
               const SizedBox(height: 20),
 
-              // ۳. سوابق شغلی
               _buildSectionContainer(
                 title: 'سوابق شغلی و کاری (اختیاری)',
                 icon: Icons.work_outline,
@@ -831,7 +833,6 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
               ),
               const SizedBox(height: 20),
 
-              // ۴. مهارت‌های تخصصی
               _buildSectionContainer(
                 title: 'مهارت‌های تخصصی',
                 icon: Icons.workspace_premium_outlined,
@@ -859,7 +860,6 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
               ),
               const SizedBox(height: 20),
 
-              // ۵. دروس و نمرات
               _buildSectionContainer(
                 title: 'دروس گذرانده‌شده و نمرات',
                 icon: Icons.bar_chart_rounded,
@@ -948,7 +948,6 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
               ),
               const SizedBox(height: 20),
 
-              // ۶. پورتفولیو و رزومه
               _buildSectionContainer(
                 title: 'پورتفولیو و فایل رزومه (فقط PDF)',
                 icon: Icons.link_rounded,
@@ -1031,7 +1030,6 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
               ),
               const SizedBox(height: 32),
 
-              // دکمه ذخیره نهایی
               _buildSaveButton(),
               const SizedBox(height: 20),
             ],
@@ -1079,7 +1077,7 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  name.isNotEmpty ? name : 'دانشجوی کارمَچ',
+                  name.isNotEmpty ? name : 'دانشجوی جدید',
                   style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4),

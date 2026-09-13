@@ -11,6 +11,7 @@ from .auth import get_current_user
 
 router = APIRouter()
 
+# Form options shared with the client.
 UNIVERSITIES = [
     "دانشگاه تهران", "دانشگاه صنعتی شریف", "دانشگاه صنعتی امیرکبیر",
     "دانشگاه علم و صنعت", "دانشگاه شهید بهشتی", "دانشگاه خواجه نصیر",
@@ -30,12 +31,12 @@ SKILLS = [
 CHAT_UPLOAD_DIR = "uploads/chat"
 os.makedirs(CHAT_UPLOAD_DIR, exist_ok=True)
 
-# ۱. روتر آپلود فایل در چت (عکس، PDF، ZIP و...)
 @router.post("/chat/upload-file")
 async def upload_chat_file(
         file: UploadFile = File(...),
         current_user: models.User = Depends(get_current_user)
 ):
+    """Store a chat attachment and return its URL and type."""
     file_ext = os.path.splitext(file.filename)[1].lower()
     is_image = file_ext in [".png", ".jpg", ".jpeg", ".webp", ".gif"]
     file_type = "image" if is_image else "document"
@@ -54,42 +55,42 @@ async def upload_chat_file(
         "file_name": file.filename,
         "file_type": file_type
     }
-# 🧠 تابع جدید تطبیق هوشمند (با احتساب ترتیب اولویت دانشگاه/رشته و وزن‌های کارفرما)
+
+
 def calculate_match_score(student_profile: models.StudentProfile, project: models.Project) -> int:
+    """Score how well a student fits a project, clamped to 35-98."""
     if not student_profile:
         return 50
 
-    # ۱. محاسبه امتیاز دانشگاه با توجه به ترتیب اولویت (رتبه ۱، ۲ یا ۳ بودن)
     target_univs = project.target_universities or []
     student_univ = student_profile.university
 
     if student_univ and student_univ in target_univs:
-        rank = target_univs.index(student_univ) # رتبه انتخابی (0 یعنی اولویت اول)
+        rank = target_univs.index(student_univ)
         if rank == 0:
-            univ_score = 100 # اولویت اول
+            univ_score = 100
         elif rank == 1:
-            univ_score = 85  # اولویت دوم
+            univ_score = 85
         elif rank == 2:
-            univ_score = 70  # اولویت سوم
+            univ_score = 70
         else:
-            univ_score = 60  # اولویت‌های بعدی
+            univ_score = 60
     elif not target_univs:
-        univ_score = 80  # کارفرما هیچ شرط دانشگاهی نگذاشته است
+        univ_score = 80
     else:
-        univ_score = 40  # دانشگاه دانشجو در لیست اولویت‌های کارفرما نیست
+        univ_score = 40
 
-    # ۲. محاسبه امتیاز رشته تحصیلی با توجه به ترتیب اولویت
     target_majors = project.target_majors or []
     student_major = student_profile.major
 
     if student_major and student_major in target_majors:
         rank = target_majors.index(student_major)
         if rank == 0:
-            major_score = 100 # اولویت اول
+            major_score = 100
         elif rank == 1:
-            major_score = 85  # اولویت دوم
+            major_score = 85
         elif rank == 2:
-            major_score = 70  # اولویت سوم
+            major_score = 70
         else:
             major_score = 60
     elif not target_majors:
@@ -97,7 +98,6 @@ def calculate_match_score(student_profile: models.StudentProfile, project: model
     else:
         major_score = 40
 
-    # ۳. امتیاز اشتراک مهارت‌ها
     student_skills = set(student_profile.skills or [])
     required_skills = set(project.required_skills or [])
     if required_skills:
@@ -106,7 +106,6 @@ def calculate_match_score(student_profile: models.StudentProfile, project: model
     else:
         skills_score = 80
 
-    # ۴. اعمال اسلایدرها و وزن‌های اختصاصی تعیین‌شده توسط کارفرما
     weights = project.weights or {
         "university_weight": 0.35,
         "major_weight": 0.35,
@@ -120,7 +119,6 @@ def calculate_match_score(student_profile: models.StudentProfile, project: model
 
     base_score = (univ_score * w_univ + major_score * w_major + skills_score * w_skills) / total_w
 
-    # ۵. پاداش سابقه کاری دانشجو (+۱۰ امتیاز)
     work_experiences = student_profile.work_experiences or []
     work_bonus = 10 if len(work_experiences) > 0 else 0
 
@@ -128,20 +126,19 @@ def calculate_match_score(student_profile: models.StudentProfile, project: model
 
     return max(35, min(98, round(final_score)))
 
-# ۱. دریافت گزینه‌های فرم‌ها
 @router.get("/options")
 def get_options():
     return {
         "universities": UNIVERSITIES,
         "majors": MAJORS,
-        "skills": SKILLS, # <--- ارسال مهارت‌های استاندارد به فلاتر
+        "skills": SKILLS,
         "cities": CITIES,
         "categories": CATEGORIES
     }
 
-# ۲. پروژه‌های پیشنهادی دانشجو
 @router.get("/recommended")
 def get_recommended_projects(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    """Active projects scoring 60+ for the student, best matches first."""
     if current_user.role != models.UserRole.STUDENT or not current_user.student_profile: return []
     p_profile = current_user.student_profile
     all_p = db.query(models.Project).filter(models.Project.is_active == True).all()
@@ -159,7 +156,6 @@ def get_recommended_projects(db: Session = Depends(get_db), current_user: models
     recommended.sort(key=lambda x: x["match_score"], reverse=True)
     return recommended
 
-# ۳. پروژه‌های ثبت‌شده توسط کارفرما
 @router.get("/my-projects", response_model=List[schemas.ProjectOut])
 def get_my_projects(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     if current_user.role != models.UserRole.COMPANY_REP or not current_user.company_rep_profile:
@@ -171,8 +167,6 @@ def get_my_projects(db: Session = Depends(get_db), current_user: models.User = D
         if not getattr(p, 'category', None): p.category = "توسعه نرم‌افزار"
     return projects
 
-# ۴. لیست درخواست‌های اپلای‌شده دانشجو
-# لیست درخواست‌های اپلای‌شده دانشجو به همراه اطلاعات کامل مصاحبه
 @router.get("/my-applications")
 def get_my_applications(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     if current_user.role != models.UserRole.STUDENT:
@@ -204,20 +198,18 @@ def get_my_applications(db: Session = Depends(get_db), current_user: models.User
                 "company_name": project.company.name if project.company else "شرکت فناوری",
                 "city": getattr(project, 'city', 'تهران') or "تهران",
                 "project_type": project.project_type,
-                "interview_date": app.interview_date,       # <--- ارسال تاریخ مصاحبه به دانشجو
-                "interview_address": app.interview_address, # <--- ارسال آدرس محل مراجعه به دانشجو
-                "interview_note": app.interview_note,       # <--- ارسال یادداشت کارفرما
+                "interview_date": app.interview_date,
+                "interview_address": app.interview_address,
+                "interview_note": app.interview_note,
             })
     return result
-# ۵. بورد مدیریت رزومه‌ها و متقاضیان برای کارفرما
-# بورد رزومه‌ها و متقاضیان دریافت شده برای کارفرما
-# بورد رزومه‌ها و متقاضیان دریافت شده برای کارفرما (با قابلیت فیلتر بر اساس یک پروژه خاص)
 @router.get("/company-applications")
 def get_company_applications(
         project_id: Optional[str] = None,
         db: Session = Depends(get_db),
         current_user: models.User = Depends(get_current_user)
 ):
+    """Applicants for the employer's projects, optionally for one project."""
     if current_user.role != models.UserRole.COMPANY_REP or not current_user.company_rep_profile:
         raise HTTPException(status_code=403, detail="دسترسی غیرمجاز")
 
@@ -248,7 +240,7 @@ def get_company_applications(
             "student_work_experiences": sp.work_experiences if sp else [],
             "student_courses": sp.courses if sp else [],
             "student_resume": sp.resume_file if sp else None,
-            "student_message": a.message, # <--- ارسال پیام دانشجو به کارفرما
+            "student_message": a.message,
             "match_score": calculate_match_score(sp, a.project) if (sp and a.project) else 75,
             "status": a.status.value if hasattr(a.status, 'value') else str(a.status),
             "interview_date": a.interview_date,
@@ -259,25 +251,23 @@ def get_company_applications(
         })
     return res
 
-# ۶. لیست کل پروژه‌ها با فیلترها
-# ۱. دریافت پروژه‌ها با فیلترهای چندتایی (Multi-Select)
 @router.get("/")
 def get_all_projects(
         project_type: Optional[str] = None,
-        cities: Optional[str] = None,        # لیست شهرها جداشده با کاما: "تهران,اصفهان"
-        categories: Optional[str] = None,    # لیست دسته‌بندی‌ها: "توسعه نرم‌افزار,طراحی UI/UX"
-        majors: Optional[str] = None,        # لیست رشته‌ها: "مهندسی کامپیوتر,علوم کامپیوتر"
-        universities: Optional[str] = None,  # لیست دانشگاه‌ها: "دانشگاه تهران,دانشگاه شریف"
+        cities: Optional[str] = None,
+        categories: Optional[str] = None,
+        majors: Optional[str] = None,
+        universities: Optional[str] = None,
         search: Optional[str] = None,
         db: Session = Depends(get_db),
         current_user: models.User = Depends(get_current_user)
 ):
+    """List projects with optional multi-select filters."""
     query = db.query(models.Project).filter(models.Project.is_active == True)
 
     if project_type and project_type != "همه":
         query = query.filter(models.Project.project_type == project_type)
 
-    # تبدیل رشته‌های کامادار به لیست در پایتون
     city_list = [c.strip() for c in cities.split(",")] if cities else []
     cat_list = [c.strip() for c in categories.split(",")] if categories else []
     major_list = [m.strip() for m in majors.split(",")] if majors else []
@@ -299,13 +289,11 @@ def get_all_projects(
 
     result = []
     for p in projects:
-        # فیلتر چندتایی دانشگاه‌های مورد قبول کارفرما
         if univ_list and "همه" not in univ_list:
             p_target_univs = p.target_universities or []
             if p_target_univs and not any(u in p_target_univs for u in univ_list):
                 continue
 
-        # فیلتر چندتایی رشته‌های تحصیلی مرتبط
         if major_list and "همه" not in major_list:
             p_target_majors = p.target_majors or []
             if p_target_majors and not any(m in p_target_majors for m in major_list):
@@ -342,12 +330,10 @@ def get_all_projects(
 
         result.append(p_dict)
 
-    # 🎯 مرتب‌سازی نزولی لیست بر اساس بیشترین درصد تطابق (از بالاترین درصد به پایین‌ترین)
     result.sort(key=lambda x: x["match_score"], reverse=True)
 
     return result
 
-# ۷. ثبت پروژه جدید کارفرما
 @router.post("/", response_model=schemas.ProjectOut, status_code=status.HTTP_201_CREATED)
 def create_project(project_in: schemas.ProjectCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     if current_user.role != models.UserRole.COMPANY_REP: raise HTTPException(status_code=403, detail="تنها کارفرما مجاز است.")
@@ -365,9 +351,9 @@ def create_project(project_in: schemas.ProjectCreate, db: Session = Depends(get_
     db.refresh(new_project)
     return new_project
 
-# ۸. دعوت به مصاحبه حضوری
 @router.post("/applications/{app_id}/schedule-interview")
 def schedule_interview(app_id: str, body: schemas.ScheduleInterviewSchema, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    """Invite an applicant to an interview and notify them."""
     app_obj = db.query(models.Application).filter(models.Application.id == app_id).first()
     if not app_obj: raise HTTPException(status_code=404, detail="درخواست یافت نشد.")
 
@@ -376,7 +362,6 @@ def schedule_interview(app_id: str, body: schemas.ScheduleInterviewSchema, db: S
     app_obj.interview_address = body.interview_address
     app_obj.interview_note = body.interview_note
 
-    # 🔔 ثبت نوتیفیکیشن خودکار برای دانشجو
     notif = models.Notification(
         user_id=app_obj.student_id,
         title="دعوت به مصاحبه حضوری",
@@ -389,7 +374,6 @@ def schedule_interview(app_id: str, body: schemas.ScheduleInterviewSchema, db: S
     db.commit()
     return {"message": "دعوت به مصاحبه ثبت شد."}
 
-# ۹. چت
 @router.post("/chat/start")
 def start_chat(app_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     if current_user.role != models.UserRole.COMPANY_REP: raise HTTPException(status_code=403, detail="تنها کارفرما مجاز به شروع چت است.")
@@ -415,8 +399,6 @@ def get_chat_threads(db: Session = Depends(get_db), current_user: models.User = 
         res.append({"thread_id": str(t.id), "title": app_obj.project.title if (app_obj and app_obj.project) else "گفتگو", "other_party": other_name})
     return res
 
-# دریافت پیام‌های چت + سین زدن قطعی پیام‌های طرف مقابل
-# روتر جدید: ویرایش پیام چت توسط فرستنده
 @router.put("/chat/messages/{message_id}")
 def edit_chat_message(
         message_id: str,
@@ -442,13 +424,13 @@ def edit_chat_message(
     return {"message": "پیام با موفقیت ویرایش شد."}
 
 
-# در تابع get_messages، فیلد is_edited را هم به خروجی اضافه کنید:
 @router.get("/chat/messages/{thread_id}")
 def get_messages(
         thread_id: str,
         db: Session = Depends(get_db),
         current_user: models.User = Depends(get_current_user)
 ):
+    """Return thread messages and mark incoming ones as seen."""
     try:
         t_uuid = uuid.UUID(thread_id)
     except ValueError:
@@ -474,11 +456,10 @@ def get_messages(
         "file_type": m.file_type,
         "file_name": m.file_name,
         "is_read": bool(m.is_read),
-        "is_edited": getattr(m, 'is_edited', False), # <--- ارسال وضعیت ویرایش
+        "is_edited": getattr(m, 'is_edited', False),
         "created_at": m.created_at.strftime("%H:%M") if m.created_at else ""
     } for m in msgs]
 
-# ۳. ویرایش ارسال پیام در چت
 @router.post("/chat/send")
 def send_message(body: schemas.SendMessageSchema, db: Session = Depends(get_db), user: models.User = Depends(get_current_user)):
     msg = models.ChatMessage(
@@ -491,7 +472,6 @@ def send_message(body: schemas.SendMessageSchema, db: Session = Depends(get_db),
     )
     db.add(msg)
 
-    # ثبت نوتیفیکیشن
     thread = db.query(models.ChatThread).filter(models.ChatThread.id == body.thread_id).first()
     if thread:
         recipient_id = thread.student_id if user.id == thread.employer_id else thread.employer_id
@@ -510,14 +490,14 @@ def send_message(body: schemas.SendMessageSchema, db: Session = Depends(get_db),
     db.commit()
     return {"message": "پیام ارسال شد."}
 
-# ۱۰. ثبت درخواست پروژه توسط دانشجو (حتماً باید انتهای فایل باشد)
 @router.post("/{project_id}/apply")
 def apply_for_project(
         project_id: str,
-        body: Optional[schemas.ApplyProjectSchema] = None, # <--- دریافت پیام دانشجو
+        body: Optional[schemas.ApplyProjectSchema] = None,
         db: Session = Depends(get_db),
         current_user: models.User = Depends(get_current_user)
 ):
+    """Submit a student application and notify the employer."""
     if current_user.role != models.UserRole.STUDENT:
         raise HTTPException(status_code=403, detail="تنها دانشجویان مجاز به ارسال درخواست هستند.")
 
@@ -530,7 +510,6 @@ def apply_for_project(
 
     user_msg = body.message if body else None
 
-    # ذخیره درخواست به همراه پیام دانشجو
     new_app = models.Application(
         student_id=current_user.id,
         project_id=project.id,
@@ -539,7 +518,6 @@ def apply_for_project(
     )
     db.add(new_app)
 
-    # ثبت نوتیفیکیشن کارفرما به همراه پیش‌نمایش پیام دانشجو
     employer_rep = db.query(models.CompanyRepresentative).filter(models.CompanyRepresentative.company_id == project.company_id).first()
     if employer_rep:
         student_name = current_user.student_profile.full_name if (current_user.student_profile and current_user.student_profile.full_name) else "یک دانشجو"
@@ -557,13 +535,9 @@ def apply_for_project(
     return {"message": "درخواست شما با موفقیت ثبت شد."}
 
 
-
-
-
-
-# دریافت تعداد پیام‌ها و نوتیفیکیشن‌های خوانده‌نشده
 @router.get("/notifications/counts")
 def get_notification_counts(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    """Return unread chat and notification counts."""
     unread_notifs = db.query(models.Notification).filter(
         models.Notification.user_id == current_user.id,
         models.Notification.is_read == False
@@ -580,8 +554,6 @@ def get_notification_counts(db: Session = Depends(get_db), current_user: models.
         "unread_chats": unread_chats
     }
 
-# دریافت لیست همه نوتیفیکیشن‌های کاربر
-# دریافت لیست کامل نوتیفیکیشن‌های کاربر همراه با شناسه لینک ارجاع
 @router.get("/notifications/")
 def get_notifications(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     notifs = db.query(models.Notification).filter(models.Notification.user_id == current_user.id).order_by(models.Notification.created_at.desc()).all()
@@ -593,7 +565,7 @@ def get_notifications(db: Session = Depends(get_db), current_user: models.User =
             "title": n.title,
             "message": n.message,
             "type": n.type,
-            "link_id": n.link_id, # <--- ارسال آیدی لینک ارجاع به فلاتر
+            "link_id": n.link_id,
             "is_read": n.is_read,
             "created_at": n.created_at.strftime("%Y/%m/%d - %H:%M") if n.created_at else ""
         })
@@ -603,7 +575,6 @@ def get_notifications(db: Session = Depends(get_db), current_user: models.User =
     return res
 
 
-# ۱. حذف اعلان توسط کاربر
 @router.delete("/notifications/{notification_id}")
 def delete_notification(
         notification_id: str,
@@ -621,7 +592,6 @@ def delete_notification(
 
     return {"message": "اعلان با موفقیت حذف شد."}
 
-# ۲. حذف پیام چت (فقط توسط فرستنده پیام)
 @router.delete("/chat/messages/{message_id}")
 def delete_chat_message(
         message_id: str,
@@ -644,7 +614,6 @@ def delete_chat_message(
     db.commit()
     return {"message": "پیام با موفقیت حذف شد."}
 
-# ۳. حذف پروژه توسط کارفرما (حتماً باید انتهای فایل قرار گیرد)
 @router.delete("/{project_id}")
 def delete_project(
         project_id: str,

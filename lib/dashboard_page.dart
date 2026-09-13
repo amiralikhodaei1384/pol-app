@@ -11,6 +11,7 @@ import 'package:pol_app/notifications_page.dart';
 import 'package:pol_app/login_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Shows the student or company dashboard based on the user role.
 class DashboardPage extends StatefulWidget {
   final bool isCompany;
 
@@ -27,9 +28,7 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 }
 
-// ==========================================
-// ۱. نمای داشبورد دانشجویی (Student View)
-// ==========================================
+/// Student home with recommended projects and application status.
 class StudentDashboardView extends StatefulWidget {
   const StudentDashboardView({super.key});
 
@@ -46,7 +45,6 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
   bool _isLoadingProjects = true;
   bool _isLoadingApplications = true;
 
-  // اطلاعات پروفایل کاربر
   String _studentName = 'دانشجوی کارمَچ';
   String _university = 'دانشگاه تهران';
   String _email = '';
@@ -65,11 +63,9 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token') ?? '';
 
-    // ۱. بارگذاری پروژه‌ها و درخواست‌های ارسال‌شده دانشجو
     final projects = await ApiService.fetchAllProjects(token);
     final applications = await ApiService.fetchMyApplications(token);
 
-    // ۲. بارگذاری تعداد پیام‌ها و نوتیفیکیشن‌های خوانده‌نشده
     if (token.isNotEmpty) {
       final counts = await ApiService.fetchNotificationCounts(token);
       final userData = await ApiService.getMe(token);
@@ -246,7 +242,6 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
           ),
           const SizedBox(width: 16),
 
-          // آیکون چت بالای صفحه
           _buildTopBarIcon(
             Icons.chat_bubble_outline,
             hasBadge: _unreadChatsCount > 0,
@@ -255,7 +250,6 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
           ),
           const SizedBox(width: 10),
 
-          // آیکون نوتیفیکیشن زنگوله
           _buildTopBarIcon(
             Icons.notifications_none,
             hasBadge: _unreadNotificationsCount > 0,
@@ -264,7 +258,6 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
           ),
           const SizedBox(width: 16),
 
-          // منوی پروفایل
           PopupMenuButton<String>(
             offset: const Offset(0, 45),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -548,7 +541,6 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     );
   }
 
-  // نمایش درخواست‌های اپلای‌شده دانشجو + باکس مصاحبه حضوری
   Widget _buildRecentRequestsSection({required bool isMobile}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -631,7 +623,6 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                     ],
                   ),
 
-                  // 📅 نمایش باکس تاریخ و آدرس مصاحبه حضوری
                   if (isShortlisted && app['interview_date'] != null) ...[
                     const Divider(height: 20),
                     Container(
@@ -769,7 +760,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                 _buildNavItem(
                   Icons.chat_bubble_outline,
                   'پیام‌ها',
-                  badge: _unreadChatsCount > 0 ? '$_unreadChatsCount' : null, // عدد پیام‌های خوانده‌نشده
+                  badge: _unreadChatsCount > 0 ? '$_unreadChatsCount' : null,
                   onTap: _openChatThreads,
                 ),
                 _buildNavItem(Icons.settings_outlined, 'تنظیمات'),
@@ -824,9 +815,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
   }
 }
 
-// ==========================================
-// ۲. نمای داشبورد شرکت/کارفرما (Company View)
-// ==========================================
+/// Employer home with active projects and applicant shortcuts.
 class CompanyDashboardView extends StatefulWidget {
   const CompanyDashboardView({super.key});
 
@@ -841,7 +830,6 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
   List<dynamic> _myProjects = [];
   bool _isLoadingMyProjects = true;
 
-  // اطلاعات کامل پروفایل شرکت
   String _companyName = 'شرکت فناوری';
   String _companyAbout = '';
   String _companyAddress = '';
@@ -858,10 +846,8 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token') ?? '';
 
-    // ۱. دریافت پروژه‌های ثبت‌شده توسط کارفرما
     final projects = await ApiService.fetchMyProjects(token);
 
-    // ۲. بارگذاری اطلاعات کارفرما و تعداد پیام‌ها/اعلان‌ها
     if (token.isNotEmpty) {
       final counts = await ApiService.fetchNotificationCounts(token);
       final userData = await ApiService.getMe(token);
@@ -1029,7 +1015,6 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
           ),
           const SizedBox(width: 16),
 
-          // چت کارفرما با عدد پیام‌های جدید
           _buildTopBarIcon(
             Icons.chat_bubble_outline,
             hasBadge: _unreadChatsCount > 0,
@@ -1038,7 +1023,6 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
           ),
           const SizedBox(width: 10),
 
-          // آیکون زنگوله نوتیفیکیشن کارفرما
           _buildTopBarIcon(
             Icons.notifications_none,
             hasBadge: _unreadNotificationsCount > 0,
@@ -1261,7 +1245,6 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
                       child: Text(item['is_active'] == true ? 'فعال' : 'غیرفعال', style: TextStyle(color: item['is_active'] == true ? Colors.green : Colors.orange, fontSize: 9, fontWeight: FontWeight.bold)),
                     ),
                     const SizedBox(width: 4),
-                    // 🗑️ آیکون حذف پروژه توسط کارفرما
                     IconButton(
                       icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
                       padding: EdgeInsets.zero,
@@ -1369,7 +1352,7 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
                 _buildNavItem(
                   Icons.chat_bubble_outline,
                   'پیام‌ها',
-                  badge: _unreadChatsCount > 0 ? '$_unreadChatsCount' : null, // <--- عدد پویای چت‌های جدید کارفرما
+                  badge: _unreadChatsCount > 0 ? '$_unreadChatsCount' : null,
                   onTap: _openChatThreads,
                 ),
                 _buildNavItem(

@@ -10,6 +10,7 @@ from app.models import models
 from app.core import security
 
 def reset_and_seed_db():
+    """Drop and recreate all tables, then insert test users and projects."""
     print("🔄 در حال پاک‌سازی جداول قدیمی...")
     Base.metadata.drop_all(bind=engine)
 
@@ -20,7 +21,6 @@ def reset_and_seed_db():
     try:
         common_password = security.get_password_hash("amir")
 
-        # ۱. ساخت کاربر دانشجو
         student_user = models.User(
             email="amir@gmail.com",
             password_hash=common_password,
@@ -45,7 +45,6 @@ def reset_and_seed_db():
         )
         db.add(student_profile)
 
-        # ۲. ساخت کاربر کارفرما و شرکت
         company_user = models.User(
             email="psp@gmail.com",
             password_hash=common_password,
@@ -70,7 +69,6 @@ def reset_and_seed_db():
         )
         db.add(rep)
 
-        # ۳. ساخت ۲ پروژه نمونه اولیه برای تست
         project1 = models.Project(
             company_id=company.id,
             title="توسعه اپلیکیشن موبایل با فلاتر (Flutter)",

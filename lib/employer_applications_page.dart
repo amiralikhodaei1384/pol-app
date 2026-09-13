@@ -4,9 +4,10 @@ import 'package:pol_app/chat_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+/// Applicants received by the employer, optionally for a single project.
 class EmployerApplicationsPage extends StatefulWidget {
-  final String? projectId;    // اگر متقاضیان یک پروژه خاص مد نظر باشد
-  final String? projectTitle; // عنوان پروژه جهت نمایش در هدر
+  final String? projectId;
+  final String? projectTitle;
 
   const EmployerApplicationsPage({
     super.key,
@@ -33,7 +34,6 @@ class _EmployerApplicationsPageState extends State<EmployerApplicationsPage> {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token') ?? '';
 
-    // ارسال آیدی پروژه در صورت وجود
     final list = await ApiService.fetchCompanyApplications(token, projectId: widget.projectId);
     if (mounted) setState(() { _applications = list; _isLoading = false; });
   }
@@ -141,6 +141,7 @@ class _EmployerApplicationsPageState extends State<EmployerApplicationsPage> {
     );
   }
 
+  /// Dialog for inviting an applicant to an in-person interview.
   void _showScheduleModal(String appId) {
     String selectedYear = '1405';
     String selectedMonth = '04';
@@ -314,7 +315,6 @@ class _EmployerApplicationsPageState extends State<EmployerApplicationsPage> {
                     const SizedBox(height: 2),
                     Text('${app['student_university']} • ${app['student_major']}', style: const TextStyle(color: Colors.grey, fontSize: 11)),
 
-                    // ✉️ باکس طلایی نمایش پیام دانشجو
                     if (studentMsg != null && studentMsg.isNotEmpty) ...[
                       const SizedBox(height: 10),
                       Container(

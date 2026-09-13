@@ -17,6 +17,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 UPLOAD_DIR = "uploads/resumes"
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> models.User:
+    """Return the authenticated user from the bearer token."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="اعتبارسنجی ناپایدار/توکن نامعتبر است یا منقضی شده.",
@@ -44,6 +45,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 @router.post("/register", response_model=schemas.UserOut)
 def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
+    """Create a student or company account."""
     user = db.query(models.User).filter(models.User.email == user_in.email).first()
     if user:
         raise HTTPException(status_code=400, detail="این ایمیل قبلاً ثبت شده است.")
@@ -62,7 +64,7 @@ def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
     if user_in.role == models.UserRole.STUDENT:
         profile = models.StudentProfile(
             user_id=db_user.id,
-            full_name="",  # <--- پاک شدن اسم دیفالت "دانشجوی جدید"
+            full_name="",
             completion_percentage=0
         )
         db.add(profile)
@@ -116,6 +118,7 @@ def login(login_data: schemas.UserLogin, db: Session = Depends(get_db)):
 
 @router.get("/me")
 def get_me(current_user: models.User = Depends(get_current_user)):
+    """Return the current user's full profile."""
     role_str = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
 
     response = {
@@ -153,13 +156,13 @@ def get_me(current_user: models.User = Depends(get_current_user)):
     return response
 
 
-# روتر جدید: ثبت و ویرایش اطلاعات شرکت (درباره شرکت، آدرس، وب‌سایت)
 @router.post("/company-profile")
 def update_company_profile(
         body: schemas.CompanyProfileUpdate,
         db: Session = Depends(get_db),
         current_user: models.User = Depends(get_current_user)
 ):
+    """Update the current employer's company details."""
     if current_user.role != models.UserRole.COMPANY_REP or not current_user.company_rep_profile:
         raise HTTPException(status_code=403, detail="تنها نمایندگان شرکت مجاز به ویرایش هستند.")
 
@@ -174,18 +177,16 @@ def update_company_profile(
     return {"message": "اطلاعات شرکت با موفقیت بروزرسانی شد."}
 
 
-# روتر جدید: دریافت فایل رزومه واقعی و ذخیره با اسم دانشجو روی سرور
-# روتر آپلود فایل رزومه (فقط PDF)
 @router.post("/upload-resume")
 async def upload_resume(
         file: UploadFile = File(...),
         db: Session = Depends(get_db),
         current_user: models.User = Depends(get_current_user)
 ):
+    """Store a PDF resume for the current student."""
     if current_user.role != models.UserRole.STUDENT:
         raise HTTPException(status_code=403, detail="تنها دانشجویان مجاز به آپلود رزومه هستند.")
 
-    # ۱. فیلتر امنیتی: تنها پسوند PDF مجاز است
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -194,7 +195,6 @@ async def upload_resume(
 
     profile = db.query(models.StudentProfile).filter(models.StudentProfile.user_id == current_user.id).first()
 
-    # ساخت نام فایل بر اساس نام واقعی دانشجو برای ذخیره در هارد سرور
     raw_name = profile.full_name.strip() if (profile and profile.full_name and profile.full_name.strip()) else current_user.email.split('@')[0]
     safe_name = re.sub(r'[^\w\s-]', '', raw_name).strip().replace(' ', '_')
     if not safe_name:
@@ -214,7 +214,8 @@ async def upload_resume(
 
     return {
         "message": "فایل رزومه با موفقیت ذخیره شد.",
-        "file_url": relative_url
+        "file_url": relative_url,
+        "file_name": new_filename
     }
 
 
@@ -224,6 +225,7 @@ def update_student_profile(
         db: Session = Depends(get_db),
         current_user: models.User = Depends(get_current_user)
 ):
+    """Create or update the current student's profile."""
     if current_user.role != models.UserRole.STUDENT:
         raise HTTPException(status_code=403, detail="تنها دانشجویان مجاز به ویرایش هستند.")
 

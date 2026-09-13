@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dashboard_page.dart';
 
+/// OTP code verification screen.
 class VerificationPage extends StatefulWidget {
   final String email;
   const VerificationPage({super.key, required this.email});
@@ -59,7 +60,6 @@ class _VerificationPageState extends State<VerificationPage> {
                   ),
                   const SizedBox(height: 40),
                   
-                  // OTP Fields
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: List.generate(5, (index) => _buildOtpBox(index)),
@@ -67,7 +67,6 @@ class _VerificationPageState extends State<VerificationPage> {
                   
                   const SizedBox(height: 40),
                   
-                  // Verify Button
                   Container(
                     width: double.infinity,
                     decoration: BoxDecoration(

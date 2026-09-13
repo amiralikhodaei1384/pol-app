@@ -6,6 +6,7 @@ import 'api_service.dart';
 import 'widgets/rotating_border.dart';
 import 'background.dart';
 
+/// Two-step login form.
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -40,6 +41,7 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _currentStep = 0);
   }
 
+  /// Logs in and saves the session locally.
   void _handleLogin() async {
     if (_formKeyStep2.currentState!.validate()) {
       setState(() => _isLoading = true);
@@ -55,7 +57,6 @@ class _LoginPageState extends State<LoginPage> {
         bool isCompany = loginResult['role'] == 'company_rep';
         String token = loginResult['access_token'] ?? '';
 
-        // 💾 ذخیره توکن و نقش کاربر در حافظه دستگاه
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('access_token', token);
         await prefs.setBool('is_company', isCompany);

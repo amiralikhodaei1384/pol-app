@@ -2,8 +2,9 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+/// HTTP client for the backend REST API.
 class ApiService {
-  // تشخیص هوشمند آدرس سرور متناسب با محیط اجرا (وب، شبیه‌ساز اندروید، دسکتاپ)
+  /// Backend address for the current platform (Android emulator uses 10.0.2.2).
   static String get baseUrl {
     if (kIsWeb) {
       return "http://127.0.0.1:8000";
@@ -14,15 +15,13 @@ class ApiService {
     }
   }
 
-  // ۱. ثبت‌نام کاربر جدید
-  // ۱. ثبت‌نام کاربر جدید (دانشجو یا شرکت)
   static Future<bool> register({
     required String email,
     required String password,
     required bool isCompany,
     String? companyName,
     String? nationalId,
-    String? companyAddress, // <--- پارامتر آدرس شرکت اضافه شد
+    String? companyAddress,
   }) async {
     try {
       final res = await http.post(
@@ -34,7 +33,7 @@ class ApiService {
           "role": isCompany ? "company_rep" : "student",
           "company_name": companyName,
           "national_id": nationalId,
-          "company_address": companyAddress, // <--- ارسال آدرس شرکت به بک‌اند
+          "company_address": companyAddress,
         }),
       );
       return res.statusCode == 200 || res.statusCode == 201;
@@ -43,7 +42,6 @@ class ApiService {
       return false;
     }
   }
-  // ویرایش اطلاعات شرکت توسط کارفرما
   static Future<bool> saveCompanyProfile({
     required String token,
     String? name,
@@ -72,7 +70,6 @@ class ApiService {
       return false;
     }
   }
-  // ۲. ورود (Login) و دریافت توکن
   static Future<Map<String, dynamic>?> login(String email, String password) async {
     try {
       final res = await http.post(
@@ -90,7 +87,6 @@ class ApiService {
     return null;
   }
 
-  // ۳. دریافت مشخصات کامل کاربر جاری
   static Future<Map<String, dynamic>?> getMe(String token) async {
     try {
       final res = await http.get(
@@ -107,7 +103,6 @@ class ApiService {
     return null;
   }
 
-  // ۴. دریافت گزینه‌های استاندارد دیتابیس (دانشگاه‌ها، رشته‌ها، شهرها، دسته‌بندی‌ها)
   static Future<Map<String, dynamic>?> fetchOptions() async {
     try {
       final res = await http.get(Uri.parse("$baseUrl/projects/options"));
@@ -120,7 +115,6 @@ class ApiService {
     return null;
   }
 
-  // ۵. ذخیره و به‌روزرسانی پروفایل دانشجو
   static Future<bool> saveStudentProfile({
     required String token,
     required String fullName,
@@ -172,7 +166,6 @@ class ApiService {
     }
   }
 
-  // ۶. آپلود بایت‌های فایل رزومه PDF به سرور
   static Future<String?> uploadResume({
     required String token,
     required List<int> fileBytes,
@@ -196,19 +189,18 @@ class ApiService {
       var streamedResponse = await request.send();
       var response = await http.Response.fromStream(streamedResponse);
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
-        return data['file_name'];
+        return data['file_url'] ?? data['file_name'];
       } else {
-        print("خطای آپلود رزومه: ${response.body}");
+        print("خطای آپلود رزومه (کد ${response.statusCode}): ${response.body}");
       }
     } catch (e) {
-      print("خطا در ارسال بایت‌های فایل: $e");
+      print("خطا در ارسال فایل: $e");
     }
     return null;
   }
 
-  // ۷. دریافت همه پروژه‌ها
   static Future<List<dynamic>> fetchAllProjects(String token) async {
     try {
       final res = await http.get(
@@ -225,8 +217,6 @@ class ApiService {
     return [];
   }
 
-  // ۸. دریافت پروژه‌ها با فیلترهای چندگانه (شامل فیلتر دانشگاه - اصلاح شد)
-  // دریافت پروژه‌ها با فیلترهای چندتایی (Multi-Select)
   static Future<List<dynamic>> fetchFilteredProjects({
     required String token,
     String? projectType,
@@ -242,7 +232,6 @@ class ApiService {
 
       if (projectType != null && projectType != "همه") queryParams['project_type'] = projectType;
 
-      // ارسال لیست‌ها به صورت متصل با کاما
       if (cities != null && cities.isNotEmpty && !cities.contains("همه")) {
         queryParams['cities'] = cities.join(",");
       }
@@ -275,7 +264,6 @@ class ApiService {
     return [];
   }
 
-  // ۹. دریافت پروژه‌های پیشنهادی هوشمند برای دانشجو
   static Future<List<dynamic>> fetchRecommendedProjects(String token) async {
     try {
       final res = await http.get(
@@ -292,7 +280,6 @@ class ApiService {
     return [];
   }
 
-  // ۱۰. دریافت پروژه‌های ثبت‌شده توسط شرکت (برای کارفرما)
   static Future<List<dynamic>> fetchMyProjects(String token) async {
     try {
       final res = await http.get(
@@ -309,7 +296,6 @@ class ApiService {
     return [];
   }
 
-  // ۱۱. دریافت لیست درخواست‌های ارسال‌شده دانشجو (پیگیری اپلای‌ها)
   static Future<List<dynamic>> fetchMyApplications(String token) async {
     try {
       final res = await http.get(
@@ -326,8 +312,6 @@ class ApiService {
     return [];
   }
 
-  // ۱۲. ارسال درخواست برای پروژه توسط دانشجو
-  // ارسال درخواست پروژه توسط دانشجو همراه با پیام اختیاری
   static Future<bool> applyForProject(String token, String projectId, {String? message}) async {
     try {
       final res = await http.post(
@@ -346,8 +330,6 @@ class ApiService {
     }
   }
 
-  // ۱۳. دریافت بورد درخواست‌ها و رزومه‌های دریافت‌شده برای کارفرما
-  // دریافت بورد رزومه‌ها و متقاضیان (با امکان دریافت آیدی پروژه خاص)
   static Future<List<dynamic>> fetchCompanyApplications(String token, {String? projectId}) async {
     try {
       var uri = Uri.parse("$baseUrl/projects/company-applications");
@@ -369,7 +351,6 @@ class ApiService {
     return [];
   }
 
-  // ۱۴. ثبت دعوت به مصاحبه حضوری توسط کارفرما
   static Future<bool> scheduleInterview(String token, String appId, String date, String address, String note) async {
     try {
       final res = await http.post(
@@ -392,7 +373,6 @@ class ApiService {
     }
   }
 
-  // ۱۵. شروع چت اختصاصی توسط کارفرما
   static Future<String?> startChat(String token, String appId) async {
     try {
       final res = await http.post(
@@ -409,7 +389,6 @@ class ApiService {
     return null;
   }
 
-  // ۱۶. دریافت لیست تمام گفتگوهای چت
   static Future<List<dynamic>> fetchChatThreads(String token) async {
     try {
       final res = await http.get(
@@ -426,7 +405,6 @@ class ApiService {
     return [];
   }
 
-  // ۱۷. دریافت پیام‌های یک چت خاص
   static Future<List<dynamic>> fetchMessages(String token, String threadId) async {
     try {
       final res = await http.get(
@@ -443,7 +421,6 @@ class ApiService {
     return [];
   }
 
-  // ۱۸. ارسال پیام در چت
   static Future<bool> sendMessage(
       String token,
       String threadId,
@@ -474,7 +451,6 @@ class ApiService {
       return false;
     }
   }
-  // دریافت تعداد اعلان‌ها و پیام‌های خوانده‌نشده
   static Future<Map<String, dynamic>> fetchNotificationCounts(String token) async {
     try {
       final res = await http.get(
@@ -489,7 +465,6 @@ class ApiService {
     return {"unread_notifications": 0, "unread_chats": 0};
   }
 
-// دریافت لیست کامل نوتیفیکیشن‌ها
   static Future<List<dynamic>> fetchNotifications(String token) async {
     try {
       final res = await http.get(
@@ -503,7 +478,6 @@ class ApiService {
     } catch (e) {}
     return [];
   }
-  // آپلود فایل اختصاصی چت
   static Future<Map<String, dynamic>?> uploadChatFile({
     required String token,
     required List<int> fileBytes,
@@ -526,7 +500,6 @@ class ApiService {
     return null;
   }
 
-  // حذف پروژه توسط کارفرما
   static Future<bool> deleteProject(String token, String projectId) async {
     try {
       final res = await http.delete(
@@ -541,7 +514,6 @@ class ApiService {
     }
   }
 
-// حذف پیام چت توسط فرستنده
   static Future<bool> deleteChatMessage(String token, String messageId) async {
     try {
       final res = await http.delete(
@@ -556,7 +528,6 @@ class ApiService {
     }
   }
 
-// حذف اعلان/نوتیفیکیشن
   static Future<bool> deleteNotification(String token, String notificationId) async {
     try {
       final res = await http.delete(
@@ -570,7 +541,6 @@ class ApiService {
       return false;
     }
   }
-  // ویرایش متن پیام چت
   static Future<bool> editChatMessage(String token, String messageId, String newText) async {
     try {
       final res = await http.put(

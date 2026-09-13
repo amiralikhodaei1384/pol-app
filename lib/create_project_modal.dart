@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pol_app/api_service.dart';
 import 'package:pol_app/shamsi_date_picker_dialog.dart';
 
+/// Dialog for employers to post a new project.
 class CreateProjectModal extends StatefulWidget {
   const CreateProjectModal({super.key});
 
@@ -15,15 +16,13 @@ class CreateProjectModal extends StatefulWidget {
 class _CreateProjectModalState extends State<CreateProjectModal> {
   final _formKey = GlobalKey<FormState>();
 
-  // Controllers
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _skillInputController = TextEditingController();
   final TextEditingController _univInputController = TextEditingController();
   final TextEditingController _majorInputController = TextEditingController();
 
-  // Form State
-  String? _selectedProjectType; // پروژه / کارآموزی / امریه
+  String? _selectedProjectType;
   String? _selectedCity;
   String? _selectedCategory;
 
@@ -37,11 +36,10 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
   List<String> _allMajors = ['مهندسی کامپیوتر', 'مهندسی برق', 'مهندسی صنایع', 'مهندسی مکانیک', 'علوم کامپیوتر', 'سایر'];
   List<String> _allSkillsOptions = ["Flutter", "Dart", "Python", "React", "JavaScript", "SQL", "Figma", "UI/UX", "Django", "FastAPI", "Node.js", "C++", "Java", "Git", "Docker"];
 
-  String? _selectedDeadline; // تاریخ شمسی
+  String? _selectedDeadline;
   bool _requiresInterview = true;
   bool _isLoading = false;
 
-  // Matching Weights (دانشگاه، رشته، مهارت‌ها)
   double _univWeight = 0.35;
   double _majorWeight = 0.35;
   double _skillsWeight = 0.30;
@@ -75,7 +73,6 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
     super.dispose();
   }
 
-  // توابع کمکی افزودن و حذف
   void _addSkill([String? customSkill]) {
     final text = customSkill ?? _skillInputController.text.trim();
     if (text.isNotEmpty && !_skillsList.contains(text)) {
@@ -141,6 +138,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
     }
   }
 
+  /// Validates the form and sends the project to the backend.
   Future<void> _submitProject() async {
     if (_skillInputController.text.trim().isNotEmpty) _addSkill();
     if (_univInputController.text.trim().isNotEmpty) _addUniversity();
@@ -266,7 +264,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
     );
   }
 
-  // 🔍 ویجت چندمنظوره نوار سرچ زنده با کشوی پیشنهادات
+  /// Search field with live suggestions and removable chips.
   Widget _buildAutocompleteSearchInput({
     required String label,
     required String hint,
@@ -336,7 +334,6 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
           ],
         ),
 
-        // 🔽 کشوی پیشنهادات زنده متناسب با تایپ
         if (suggestions.isNotEmpty) ...[
           const SizedBox(height: 4),
           Container(
@@ -369,7 +366,6 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
           ),
         ],
 
-        // 🏷️ برچسب‌های انتخابی
         if (selectedList.isNotEmpty) ...[
           const SizedBox(height: 8),
           Wrap(
@@ -429,7 +425,6 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // هدر دایالوگ
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -448,7 +443,6 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
               ),
               const Divider(height: 24),
 
-              // فرم ورودی‌ها
               Expanded(
                 child: SingleChildScrollView(
                   child: Form(
@@ -456,7 +450,6 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // ۱. عنوان فرصت شغلی
                         const Text('عنوان فرصت شغلی / پروژه * (حداقل ۳ کاراکتر)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 6),
                         TextFormField(
@@ -474,7 +467,6 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                         ),
                         const SizedBox(height: 16),
 
-                        // ۲. نوع همکاری و شهر
                         Row(
                           children: [
                             Expanded(
@@ -516,7 +508,6 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                         ),
                         const SizedBox(height: 16),
 
-                        // ۳. دسته‌بندی شغلی
                         const Text('دسته‌بندی شغلی *', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 6),
                         DropdownButtonFormField<String>(
@@ -529,7 +520,6 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                         ),
                         const SizedBox(height: 16),
 
-                        // ۴. دانشگاه‌های اولویت‌دار
                         _buildAutocompleteSearchInput(
                           label: 'دانشگاه‌های اولویت‌دار (اختیاری)',
                           hint: 'جستجوی دانشگاه (مثال: تهران، شریف)...',
@@ -542,7 +532,6 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                         ),
                         const SizedBox(height: 16),
 
-                        // ۵. رشته‌های مرتبط
                         _buildAutocompleteSearchInput(
                           label: 'رشته‌های تحصیلی مرتبط (اختیاری)',
                           hint: 'جستجوی رشته (مثال: کامپیوتر، برق)...',
@@ -555,7 +544,6 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                         ),
                         const SizedBox(height: 16),
 
-                        // ۶. مهارت‌های مورد نیاز
                         _buildAutocompleteSearchInput(
                           label: 'مهارت‌های مورد نیاز *',
                           hint: 'جستجوی مهارت (مثال: Flutter, Python)...',
@@ -568,7 +556,6 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                         ),
                         const SizedBox(height: 16),
 
-                        // ۷. مهلت ارسال درخواست
                         const Text('مهلت ارسال درخواست *', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 6),
                         InkWell(
@@ -598,7 +585,6 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                         ),
                         const SizedBox(height: 16),
 
-                        // ۸. شرح وظایف
                         const Text('شرح وظایف و خروجی مورد انتظار * (حداقل ۱۰ کاراکتر)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 6),
                         TextFormField(
@@ -617,7 +603,6 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                         ),
                         const SizedBox(height: 16),
 
-                        // ۹. نیازمند مصاحبه
                         SwitchListTile(
                           value: _requiresInterview,
                           activeColor: const Color(0xFF1E6AFB),
@@ -628,7 +613,6 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                         ),
                         const SizedBox(height: 12),
 
-                        // ۱۰. تنظیم وزن‌دهی
                         ExpansionTile(
                           title: const Text('وزن‌دهی تطبیق هوشمند (اختیاری)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1E6AFB))),
                           subtitle: const Text('تنظیم میزان اهمیت دانشگاه، رشته و مهارت‌ها در رتبه‌بندی دانشجو', style: TextStyle(fontSize: 10, color: Colors.grey)),
@@ -646,7 +630,6 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
               ),
 
               const SizedBox(height: 16),
-              // دکمه‌های ثبت
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [

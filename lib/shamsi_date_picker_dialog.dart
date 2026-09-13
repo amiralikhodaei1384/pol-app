@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-// تابع فراخوانی مدال انتخاب تاریخ شمسی
+/// Shows a Shamsi (Persian calendar) date picker and returns the selected date.
 Future<String?> showShamsiDatePicker({
   required BuildContext context,
   String title = 'انتخاب تاریخ شمسی',
@@ -75,7 +75,7 @@ class _ShamsiDatePickerDialogState extends State<_ShamsiDatePickerDialog> {
   int get _maxDays {
     if (_selectedMonth <= 6) return 31;
     if (_selectedMonth <= 11) return 30;
-    return 29; // اسفند
+    return 29;
   }
 
   @override
@@ -93,7 +93,6 @@ class _ShamsiDatePickerDialogState extends State<_ShamsiDatePickerDialog> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // هدر دایالوگ
               Row(
                 children: [
                   const Icon(Icons.calendar_month, color: Color(0xFF1E6AFB), size: 24),
@@ -103,7 +102,6 @@ class _ShamsiDatePickerDialogState extends State<_ShamsiDatePickerDialog> {
               ),
               const Divider(height: 24),
 
-              // نمایش تاریخ انتخابی بزرگ در باکس سبز
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
@@ -122,10 +120,8 @@ class _ShamsiDatePickerDialogState extends State<_ShamsiDatePickerDialog> {
               ),
               const SizedBox(height: 16),
 
-              // منوهای انتخابی سال، ماه، روز
               Row(
                 children: [
-                  // سال
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -144,7 +140,6 @@ class _ShamsiDatePickerDialogState extends State<_ShamsiDatePickerDialog> {
                   ),
                   const SizedBox(width: 8),
 
-                  // ماه
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -163,7 +158,6 @@ class _ShamsiDatePickerDialogState extends State<_ShamsiDatePickerDialog> {
                   ),
                   const SizedBox(width: 8),
 
-                  // روز
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -183,7 +177,6 @@ class _ShamsiDatePickerDialogState extends State<_ShamsiDatePickerDialog> {
                 ],
               ),
 
-              // انتخاب ساعت در صورت نیاز
               if (widget.includeTime) ...[
                 const SizedBox(height: 12),
                 Column(
@@ -204,7 +197,6 @@ class _ShamsiDatePickerDialogState extends State<_ShamsiDatePickerDialog> {
 
               const SizedBox(height: 24),
 
-              // دکمه‌های اکشن
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [

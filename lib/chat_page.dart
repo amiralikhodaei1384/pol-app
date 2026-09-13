@@ -8,6 +8,7 @@ import 'package:pol_app/api_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+/// Chat conversation with live refresh, file sharing and message editing.
 class ChatPage extends StatefulWidget {
   final String threadId;
   const ChatPage({super.key, required this.threadId});
@@ -23,7 +24,6 @@ class _ChatPageState extends State<ChatPage> {
   bool _isInitialLoading = true;
   Timer? _pollingTimer;
 
-  // متغیر حالت ویرایش
   String? _editingMessageId;
 
   @override
@@ -31,7 +31,6 @@ class _ChatPageState extends State<ChatPage> {
     super.initState();
     _loadMessages(isFirstTime: true);
 
-    // رفرش زنده هر ۲ ثانیه برای سین خوردن و دریافت پیام
     _pollingTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       if (mounted) {
         _loadMessages(isFirstTime: false);
@@ -46,6 +45,7 @@ class _ChatPageState extends State<ChatPage> {
     super.dispose();
   }
 
+  /// Fetches messages; the server marks incoming ones as seen.
   Future<void> _loadMessages({bool isFirstTime = false}) async {
     if (isFirstTime) {
       setState(() => _isInitialLoading = true);
@@ -63,7 +63,6 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-  // 📎 انتخاب و ارسال فایل
   Future<void> _pickAndSendFile() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -121,7 +120,6 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-  // ارسال پیام جدید یا ذخیره ویرایش
   Future<void> _sendOrUpdateText() async {
     final text = _msgController.text.trim();
     if (text.isEmpty) return;
@@ -130,7 +128,6 @@ class _ChatPageState extends State<ChatPage> {
     final token = prefs.getString('access_token') ?? '';
 
     if (_editingMessageId != null) {
-      // حالت ویرایش پیام
       final ok = await ApiService.editChatMessage(token, _editingMessageId!, text);
       if (ok) {
         setState(() => _editingMessageId = null);
@@ -138,7 +135,6 @@ class _ChatPageState extends State<ChatPage> {
         _loadMessages();
       }
     } else {
-      // حالت ارسال پیام جدید
       final ok = await ApiService.sendMessage(token, widget.threadId, text);
       if (ok) {
         _msgController.clear();
@@ -147,7 +143,7 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-  // 📱 منوی اکشن تلگرامی کپی، ویرایش و حذف پیام
+  /// Shows copy, edit and delete actions for a message.
   void _showTelegramMessageMenu(dynamic m) {
     final isMe = m['is_me'] ?? false;
     final text = m['text'] ?? '';
@@ -173,7 +169,6 @@ class _ChatPageState extends State<ChatPage> {
                 Container(width: 36, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
                 const SizedBox(height: 12),
 
-                // کپی متن
                 if (text.toString().isNotEmpty)
                   ListTile(
                     leading: const Icon(Icons.copy_rounded, color: Color(0xFF1E6AFB)),
@@ -187,7 +182,6 @@ class _ChatPageState extends State<ChatPage> {
                     },
                   ),
 
-                // ✏️ ویرایش پیام (فقط برای پیام‌های خودم)
                 if (isMe && messageId.isNotEmpty && text.toString().isNotEmpty)
                   ListTile(
                     leading: const Icon(Icons.edit_rounded, color: Color(0xFF10B981)),
@@ -201,7 +195,6 @@ class _ChatPageState extends State<ChatPage> {
                     },
                   ),
 
-                // 🗑️ حذف پیام
                 if (isMe && messageId.isNotEmpty)
                   ListTile(
                     leading: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
@@ -252,7 +245,6 @@ class _ChatPageState extends State<ChatPage> {
         ),
         body: Column(
           children: [
-            // لیست پیام‌ها
             Expanded(
               child: _isInitialLoading
                   ? const Center(child: CircularProgressIndicator(color: Color(0xFF1E6AFB)))
@@ -357,7 +349,6 @@ class _ChatPageState extends State<ChatPage> {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     const Spacer(),
-                                    // برچسب "ویرایش شده"
                                     if (isEdited) ...[
                                       Text(
                                         'ویرایش شده  ',
@@ -389,7 +380,6 @@ class _ChatPageState extends State<ChatPage> {
               ),
             ),
 
-            // ✏️ کادر بالا برای حالت ویرایش پیام
             if (_editingMessageId != null)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -420,7 +410,6 @@ class _ChatPageState extends State<ChatPage> {
                 ),
               ),
 
-            // کادر پایین ارسال پیام و فایل
             Container(
               color: Colors.white,
               padding: const EdgeInsets.all(12.0),

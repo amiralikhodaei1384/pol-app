@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'login_page.dart';
 import 'dashboard_page.dart';
-import 'student_profile_builder_page.dart'; // <--- صفحه پروفایل‌ساز اضافه شد
+import 'student_profile_builder_page.dart';
 import 'api_service.dart';
 import 'widgets/rotating_border.dart';
 import 'background.dart';
 import 'company_profile_page.dart';
+/// Multi-step sign-up for students and companies.
 class RegistrationPage extends StatefulWidget {
   const RegistrationPage({super.key});
 
@@ -67,6 +68,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
     }
   }
 
+  /// Registers, logs in automatically, then opens profile setup.
   void _handleRegister() async {
     if (_formKeyStep3.currentState!.validate()) {
       if (_passwordController.text != _confirmPasswordController.text) {
@@ -81,7 +83,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
       final email = _emailController.text.trim();
       final password = _passwordController.text;
 
-      // ۱. ثبت‌نام در بک‌اند
       final registerSuccess = await ApiService.register(
         email: email,
         password: password,
@@ -92,7 +93,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
       );
 
       if (registerSuccess) {
-        // ۲. ورود خودکار پس از ثبت‌نام برای گرفتن توکن واقعی JWT
         final loginData = await ApiService.login(email, password);
         setState(() => _isLoading = false);
 
@@ -103,14 +103,12 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
           if (mounted) {
             if (!_isCompany) {
-              // 🎓 اگر دانشجو است -> هدایت خودکار به صفحه پروفایل‌ساز ۳ مرحله‌ای
               Navigator.pushAndRemoveUntil(
                 context,
                 MaterialPageRoute(builder: (context) => const StudentProfileBuilderPage()),
                     (route) => false,
               );
             } else {
-              // 🏢 اگر شرکت است -> هدایت به داشبورد کارفرما
               Navigator.pushAndRemoveUntil(
                 context,
                 MaterialPageRoute(builder: (context) => const CompanyProfilePage(isWizard: true)),
@@ -119,7 +117,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
             }
           }
         } else {
-          // اگر ورود خودکار ناموفق بود، کاربر به صفحه لاگین هدایت می‌شود
           if (mounted) {
             Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginPage()));
           }
@@ -302,7 +299,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
             hint: 'شناسه ملی شرکت (اختیاری)',
             icon: Icons.badge_outlined,
             keyboardType: TextInputType.number,
-            validator: (value) => null, // اختیاری برای تست سریع
+            validator: (value) => null,
           ),
           const SizedBox(height: 12),
           _buildTextField(

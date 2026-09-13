@@ -1,3 +1,5 @@
+import 'dart:io' show File;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
@@ -6,6 +8,7 @@ import 'package:pol_app/dashboard_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pol_app/shamsi_date_picker_dialog.dart';
 
+/// Four-step profile setup wizard for new students.
 class StudentProfileBuilderPage extends StatefulWidget {
   const StudentProfileBuilderPage({super.key});
 
@@ -19,7 +22,6 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
   bool _isLoadingProfile = true;
   bool _isUploadingResume = false;
 
-  // ۱. اطلاعات فردی
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -27,13 +29,10 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
   final _residenceController = TextEditingController();
   final _birthPlaceController = TextEditingController();
 
-  // سوابق تحصیلی
   final List<Map<String, dynamic>> _educations = [];
 
-  // ۲. سوابق کاری
   final List<Map<String, dynamic>> _workExperiences = [];
 
-  // ۳. مهارت‌ها و نمرات دروس
   final _skillController = TextEditingController();
   List<String> _skills = [];
 
@@ -41,11 +40,10 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
   final _courseGradeController = TextEditingController();
   List<Map<String, dynamic>> _courses = [];
 
-  // ۴. پورتفولیو و رزومه
   final _githubController = TextEditingController();
   final _figmaController = TextEditingController();
-  String? _resumeUserFileName; // نام اصلی فایل جهت نمایش در UI
-  String? _resumeServerPath;   // مسیر ذخیره فیزیکی روی سرور
+  String? _resumeUserFileName;
+  String? _resumeServerPath;
 
   final _persianRegex = RegExp(r'^[\u0600-\u06FF\s]+$');
   final _phoneRegex = RegExp(r'^09\d{9}$');
@@ -67,7 +65,6 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token') ?? '';
 
-    // دریافت گزینه‌های استاندارد دیتابیس
     final options = await ApiService.fetchOptions();
     if (options != null && mounted) {
       setState(() {
@@ -147,7 +144,6 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
     );
   }
 
-  // انتخاب فقط فایل PDF
   Future<void> _pickAndUploadResume() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -164,15 +160,23 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
           return;
         }
 
-        if (file.bytes != null) {
-          setState(() => _isUploadingResume = true);
+        List<int>? fileBytes = file.bytes;
+        if (fileBytes == null && !kIsWeb && file.path != null) {
+          fileBytes = await File(file.path!).readAsBytes();
+        }
+
+        if (fileBytes != null && fileBytes.isNotEmpty) {
+          setState(() {
+            _isUploadingResume = true;
+            _resumeUserFileName = file.name;
+          });
 
           final prefs = await SharedPreferences.getInstance();
           final token = prefs.getString('access_token') ?? '';
 
           final savedPath = await ApiService.uploadResume(
             token: token,
-            fileBytes: file.bytes!,
+            fileBytes: fileBytes,
             fileName: file.name,
           );
 
@@ -180,10 +184,11 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
 
           if (savedPath != null) {
             setState(() {
-              _resumeUserFileName = file.name; // نمایش اسم اصلی پی‌دی‌اف انتخابی کاربر
-              _resumeServerPath = savedPath;   // مسیر ذخیره در سرور
+              _resumeServerPath = savedPath;
             });
             _showSnack('فایل رزومه PDF با موفقیت ذخیره شد.', isError: false);
+          } else {
+            _showSnack('خطا در ذخیره‌سازی فایل روی سرور.');
           }
         }
       }
@@ -220,7 +225,6 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
     }
   }
 
-  // دیالوگ افزودن سابقه تحصیلی با منوی کشویی دانشگاه و رشته
   void _showAddEducationDialog() {
     String degree = 'کارشناسی';
     String? selectedUniversity;
@@ -261,7 +265,6 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
                         onChanged: (val) => degree = val ?? degree,
                       ),
                       const SizedBox(height: 12),
-
                       _buildLabel('نام دانشگاه *'),
                       DropdownButtonFormField<String>(
                         value: selectedUniversity,
@@ -272,7 +275,6 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
                         onChanged: (val) => setModalState(() => selectedUniversity = val),
                       ),
                       const SizedBox(height: 12),
-
                       _buildLabel('رشته تحصیلی *'),
                       DropdownButtonFormField<String>(
                         value: selectedMajor,
@@ -283,7 +285,6 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
                         onChanged: (val) => setModalState(() => selectedMajor = val),
                       ),
                       const SizedBox(height: 12),
-
                       Row(
                         children: [
                           Expanded(
@@ -530,6 +531,7 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
     );
   }
 
+  /// Validates the current step before moving on.
   bool _validateAndNext() {
     if (_currentStep == 0) {
       final firstName = _firstNameController.text.trim();
@@ -556,6 +558,7 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
     return true;
   }
 
+  /// Saves the completed profile to the backend.
   Future<void> _submitProfile() async {
     if (!_validateAndNext()) return;
 
@@ -971,7 +974,6 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
     );
   }
 
-  // 🔍 نوار سرچ همراه با منوی پیشنهادات زنده (Autocomplete Dropdown)
   Widget _buildSkillAutocompleteInput() {
     final query = _skillController.text.trim().toLowerCase();
     final suggestions = query.isEmpty
@@ -1017,7 +1019,6 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
           ],
         ),
 
-        // 🔽 منوی پیشنهادات زنده کشویی (Autocomplete Dropdown Menu)
         if (suggestions.isNotEmpty) ...[
           const SizedBox(height: 4),
           Container(
@@ -1123,6 +1124,9 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
   }
 
   Widget _buildStep4PortfolioAndResume() {
+    final bool hasResume = (_resumeUserFileName != null && _resumeUserFileName!.isNotEmpty) ||
+        (_resumeServerPath != null && _resumeServerPath!.isNotEmpty);
+
     return Column(
       children: [
         _buildSectionCard(
@@ -1149,13 +1153,17 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
             children: [
               InkWell(
                 onTap: _isUploadingResume ? null : _pickAndUploadResume,
+                borderRadius: BorderRadius.circular(12),
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: _resumeUserFileName != null ? const Color(0xFFECFDF5) : const Color(0xFFF1F5F9),
+                    color: hasResume ? const Color(0xFFECFDF5) : const Color(0xFFF1F5F9),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: _resumeUserFileName != null ? const Color(0xFF10B981) : const Color(0xFFCBD5E1)),
+                    border: Border.all(
+                      color: hasResume ? const Color(0xFF10B981) : const Color(0xFFCBD5E1),
+                      width: hasResume ? 1.5 : 1.0,
+                    ),
                   ),
                   child: _isUploadingResume
                       ? const Column(
@@ -1167,24 +1175,33 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
                   )
                       : Column(
                     children: [
-                      Icon(_resumeUserFileName != null ? Icons.picture_as_pdf : Icons.cloud_upload_outlined, size: 36, color: _resumeUserFileName != null ? const Color(0xFF10B981) : const Color(0xFF1E6AFB)),
+                      Icon(
+                        hasResume ? Icons.check_circle_rounded : Icons.cloud_upload_outlined,
+                        size: 38,
+                        color: hasResume ? const Color(0xFF10B981) : const Color(0xFF1E6AFB),
+                      ),
                       const SizedBox(height: 8),
                       Text(
-                        _resumeUserFileName ?? 'برای انتخاب یا تغییر فایل رزومه (فقط PDF) کلیک کنید',
+                        hasResume
+                            ? (_resumeUserFileName ?? 'فایل رزومه آپلود شده (PDF)')
+                            : 'برای انتخاب یا تغییر فایل رزومه (فقط PDF) کلیک کنید',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
-                          color: _resumeUserFileName != null ? const Color(0xFF047857) : Colors.black54,
+                          color: hasResume ? const Color(0xFF047857) : Colors.black54,
                         ),
                       ),
-                      if (_resumeUserFileName == null)
-                        const Text('تنها فرمت PDF مجاز است (حداکثر ۱۰ مگابایت)', style: TextStyle(fontSize: 9, color: Colors.grey)),
+                      const SizedBox(height: 4),
+                      Text(
+                        hasResume ? '✓ فایل با موفقیت ثبت شد. برای تعویض مجدد کلیک کنید' : 'تنها فرمت PDF مجاز است (حداکثر ۱۰ مگابایت)',
+                        style: TextStyle(fontSize: 9, color: hasResume ? const Color(0xFF047857) : Colors.grey),
+                      ),
                     ],
                   ),
                 ),
               ),
-              if (_resumeUserFileName != null) ...[
+              if (hasResume) ...[
                 const SizedBox(height: 10),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -1201,7 +1218,7 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
                         _resumeServerPath = null;
                       }),
                       icon: const Icon(Icons.delete_outline, size: 16, color: Colors.redAccent),
-                      label: const Text('حذف فایل', style: TextStyle(fontSize: 11, color: Colors.redAccent)),
+                      label: const Text('حذف فایل رزومه', style: TextStyle(fontSize: 11, color: Colors.redAccent)),
                     ),
                   ],
                 ),

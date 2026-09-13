@@ -5,9 +5,6 @@ from datetime import datetime
 from enum import Enum
 from ..models.models import UserRole
 
-# ----------------------------------------------------
-# 1. Schemas کاربر (User Schemas)
-# ----------------------------------------------------
 class UserBase(BaseModel):
     email: EmailStr
     phone: Optional[str] = None
@@ -38,9 +35,6 @@ class UserOut(UserBase):
     class Config:
         from_attributes = True
 
-# ----------------------------------------------------
-# 2. Schemas شرکت (Company Schemas)
-# ----------------------------------------------------
 class CompanyOut(BaseModel):
     id: UUID
     name: str
@@ -56,9 +50,6 @@ class CompanyProfileUpdate(BaseModel):
     website: Optional[str] = None
     address: Optional[str] = None
 
-# ----------------------------------------------------
-# 3. Schemas پروژه (Project Schemas)
-# ----------------------------------------------------
 class ProjectType(str, Enum):
     INTERNSHIP = "کارآموزی"
     MILITARY = "امریه"
@@ -73,7 +64,7 @@ class ProjectCreate(BaseModel):
     title: str = Field(..., min_length=3, max_length=150)
     description: str
     required_skills: List[str]
-    deadline: str  # <--- تغییر از datetime به str جهت پذیرش تاریخ شمسی
+    deadline: str
     project_type: ProjectType = Field(default=ProjectType.PROJECT)
     city: Optional[str] = "تهران"
     category: Optional[str] = "عمومی"
@@ -93,9 +84,6 @@ class ProjectOut(ProjectCreate):
     class Config:
         from_attributes = True
 
-# ----------------------------------------------------
-# 4. Schemas دانشجو (Student Schemas)
-# ----------------------------------------------------
 class CourseGrade(BaseModel):
     course_name: str
     grade: float = Field(..., ge=0, le=20)
@@ -125,9 +113,6 @@ class StudentProfileOut(StudentProfileCreate):
     class Config:
         from_attributes = True
 
-# ----------------------------------------------------
-# 5. Schemas چت و مصاحبه (Chat & Interview Schemas)
-# ----------------------------------------------------
 class ScheduleInterviewSchema(BaseModel):
     interview_date: str
     interview_address: str
@@ -155,4 +140,4 @@ class EditMessageSchema(BaseModel):
     text: str
 
 class ApplyProjectSchema(BaseModel):
-    message: Optional[str] = None # پیام کوتاه همراه اپلای
+    message: Optional[str] = None

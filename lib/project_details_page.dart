@@ -4,9 +4,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'employer_applications_page.dart';
 
+/// Project details with match score and apply action.
 class ProjectDetailsPage extends StatefulWidget {
   final dynamic project;
-  final bool isCompany; // تعیین نقش کاربر (دانشجو یا کارفرما)
+  final bool isCompany;
 
   const ProjectDetailsPage({
     super.key,
@@ -35,11 +36,10 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
 
     setState(() => _isApplying = true);
 
-    // ارسال پارامتر message به تابع API
     final success = await ApiService.applyForProject(
       token,
       widget.project['id'].toString(),
-      message: _messageController.text.trim(), // <--- فرستادن متن پیام دانشجو
+      message: _messageController.text.trim(),
     );
 
     setState(() => _isApplying = false);
@@ -63,6 +63,7 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
     }
   }
 
+  /// Asks the student for an optional message before applying.
   void _showApplyDialog() {
     showModalBottomSheet(
       context: context,
@@ -168,7 +169,6 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ۱. کارت هدر اصلی فرصت شغلی (Jobinja Header)
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
@@ -211,7 +211,6 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
 
               const SizedBox(height: 16),
 
-              // ۲. کارت تطبیق هوشمند (مخصوص دانشجو)
               if (!widget.isCompany) ...[
                 Container(
                   padding: const EdgeInsets.all(18),
@@ -258,7 +257,6 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
                 const SizedBox(height: 16),
               ],
 
-              // ۳. کارت مشخصات کلیدی شغلی (جابینجایی)
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(18),
@@ -291,7 +289,6 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
 
               const SizedBox(height: 16),
 
-              // ۴. مهارت‌های مورد نیاز
               const Text('مهارت‌های مورد نیاز', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
               const SizedBox(height: 10),
               Wrap(
@@ -312,7 +309,6 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
 
               const SizedBox(height: 20),
 
-              // ۵. شرح وظایف و انتشارات
               const Text('شرح وظایف و خروجی مورد انتظار', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
               const SizedBox(height: 10),
               Container(
@@ -331,7 +327,6 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
 
               const SizedBox(height: 24),
 
-              // ۶. 🏢 درباره شرکت (Jobinja About Company Section)
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
@@ -374,7 +369,6 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
           ),
         ),
 
-        // دکمه ثابت پایین صفحه
           bottomNavigationBar: Container(
             padding: const EdgeInsets.all(16),
             decoration: const BoxDecoration(

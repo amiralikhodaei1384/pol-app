@@ -3,8 +3,9 @@ import 'package:pol_app/api_service.dart';
 import 'package:pol_app/dashboard_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Company profile editor, also shown as a wizard step after sign-up.
 class CompanyProfilePage extends StatefulWidget {
-  final bool isWizard; // اگر true باشد یعنی از مسیر ثبت‌نام آمده است
+  final bool isWizard;
 
   const CompanyProfilePage({super.key, this.isWizard = false});
 
@@ -76,7 +77,6 @@ class _CompanyProfilePageState extends State<CompanyProfilePage> {
       );
 
       if (widget.isWizard) {
-        // هدایت به داشبورد کارفرما پس از ثبت‌نام
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const DashboardPage(isCompany: true)),
@@ -119,11 +119,9 @@ class _CompanyProfilePageState extends State<CompanyProfilePage> {
           padding: const EdgeInsets.all(20.0),
           child: Column(
             children: [
-              // کارت هدر بالایی با تم گرادیانت
               _buildTopHeaderCard(),
               const SizedBox(height: 20),
 
-              // ۱. مشخصات ثبتی و نام
               _buildSectionContainer(
                 title: 'مشخصات رسمی شرکت',
                 icon: Icons.business_rounded,
@@ -139,7 +137,6 @@ class _CompanyProfilePageState extends State<CompanyProfilePage> {
               ),
               const SizedBox(height: 20),
 
-              // ۲. درباره شرکت (توضیحات و معرفی)
               _buildSectionContainer(
                 title: 'معرفی و درباره شرکت',
                 icon: Icons.description_outlined,
@@ -174,7 +171,6 @@ class _CompanyProfilePageState extends State<CompanyProfilePage> {
               ),
               const SizedBox(height: 20),
 
-              // ۳. اینترنت و آدرس دفتر
               _buildSectionContainer(
                 title: 'اطلاعات اینترنتی و آدرس',
                 icon: Icons.location_on_outlined,
@@ -197,7 +193,6 @@ class _CompanyProfilePageState extends State<CompanyProfilePage> {
               ),
               const SizedBox(height: 32),
 
-              // دکمه ذخیره
               _buildSaveButton(),
               const SizedBox(height: 20),
             ],

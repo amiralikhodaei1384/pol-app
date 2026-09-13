@@ -7,7 +7,6 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from ..db.base import Base
 
-# Enums
 class UserRole(str, enum.Enum):
     STUDENT = "student"
     COMPANY_REP = "company_rep"
@@ -20,7 +19,7 @@ class ProjectStatus(str, enum.Enum):
 
 class ApplicationStatus(str, enum.Enum):
     APPLIED = "applied"
-    SHORTLISTED = "shortlisted" # دعوت به مصاحبه
+    SHORTLISTED = "shortlisted"
     ACCEPTED = "accepted"
     REJECTED = "rejected"
 
@@ -29,7 +28,6 @@ class ContractStatus(str, enum.Enum):
     SIGNED = "signed"
     CANCELLED = "cancelled"
 
-# Models
 class User(Base):
     __tablename__ = "users"
 
@@ -51,7 +49,7 @@ class Company(Base):
     name = Column(String, nullable=False)
     national_id = Column(String, unique=True, index=True, nullable=False)
     website = Column(String, nullable=True)
-    about = Column(Text, nullable=True)        # <--- فیلد جدید: درباره شرکت
+    about = Column(Text, nullable=True)
     address = Column(String, nullable=True)
     is_active = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -104,10 +102,10 @@ class Project(Base):
     required_skills = Column(JSON, nullable=False)
     deadline = Column(String, nullable=False)
     project_type = Column(String(50), nullable=False)
-    city = Column(String(100), nullable=True)             # بدون دیفالت هاردکد
-    category = Column(String(100), nullable=True)         # بدون دیفالت هاردکد
-    target_universities = Column(JSON, nullable=True)     # لیست دانشگاه‌های اولویت‌دار انتخاب شده توسط کارفرما
-    target_majors = Column(JSON, nullable=True)           # لیست رشته‌های مورد نظر کارفرما
+    city = Column(String(100), nullable=True)
+    category = Column(String(100), nullable=True)
+    target_universities = Column(JSON, nullable=True)
+    target_majors = Column(JSON, nullable=True)
     requires_interview = Column(Boolean, default=True)
     weights = Column(JSON, nullable=True)
     is_active = Column(Boolean, default=True)
@@ -122,7 +120,7 @@ class Application(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     student_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id"))
-    message = Column(Text, nullable=True) # <--- ستون جدید: ذخیره پیام دانشجو موقع اپلای
+    message = Column(Text, nullable=True)
     status = Column(Enum(ApplicationStatus), default=ApplicationStatus.APPLIED)
     contract_status = Column(Enum(ContractStatus), default=ContractStatus.PENDING_PHYSICAL)
 
@@ -135,7 +133,6 @@ class Application(Base):
     project = relationship("Project", back_populates="applications")
     student = relationship("User")
 
-# مدل‌های چت اختصاصی (شروع چت فقط توسط کارفرما)
 class ChatThread(Base):
     __tablename__ = "chat_threads"
 
@@ -156,20 +153,19 @@ class ChatMessage(Base):
     file_type = Column(String, nullable=True)
     file_name = Column(String, nullable=True)
     is_read = Column(Boolean, default=False)
-    is_edited = Column(Boolean, default=False) # <--- فیلد ویرایش پیام
+    is_edited = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-# مدل جدول نوتیفیکیشن‌ها و اعلان‌ها
 class Notification(Base):
     __tablename__ = "notifications"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False) # دریافت‌کننده نوتیفیکیشن
-    title = Column(String, nullable=False)                                      # عنوان
-    message = Column(Text, nullable=False)                                      # متن پیام
-    type = Column(String, default="general")                                    # "chat", "interview", "application"
-    link_id = Column(String, nullable=True)                                     # آیدی مربوطه جهت ارجاع
-    is_read = Column(Boolean, default=False)                                    # خوانده‌شده / نشده
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    title = Column(String, nullable=False)
+    message = Column(Text, nullable=False)
+    type = Column(String, default="general")
+    link_id = Column(String, nullable=True)
+    is_read = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User")

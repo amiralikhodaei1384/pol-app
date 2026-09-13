@@ -6,7 +6,6 @@ from app.api import auth, projects
 
 app = FastAPI(title="Karmatch API")
 
-# تنظیم CORS برای ارتباط با فلاتر
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -15,8 +14,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ساخت پوشه ذخیره رزومه‌ها در صورت عدم وجود
 os.makedirs("uploads/resumes", exist_ok=True)
+# Serve uploaded resumes and chat files.
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 app.include_router(auth.router, prefix="/auth", tags=["Auth"])
