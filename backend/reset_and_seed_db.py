@@ -10,16 +10,42 @@ from app.models import models
 from app.core import security
 
 def reset_and_seed_db():
-    """Drop and recreate all tables, then insert test users and projects."""
-    print("🔄 در حال پاک‌سازی جداول قدیمی...")
     Base.metadata.drop_all(bind=engine)
-
-    print("🏗️ در حال ساخت جداول جدید...")
     Base.metadata.create_all(bind=engine)
 
     db = SessionLocal()
     try:
         common_password = security.get_password_hash("amir")
+
+        universities = [
+            "دانشگاه تهران", "دانشگاه صنعتی شریف", "دانشگاه صنعتی امیرکبیر",
+            "دانشگاه علم و صنعت", "دانشگاه شهید بهشتی", "دانشگاه خواجه نصیر",
+            "دانشگاه علامه طباطبایی", "دانشگاه اصفهان", "دانشگاه شیراز", "سایر"
+        ]
+        for u in universities:
+            db.add(models.University(name=u))
+
+        majors = [
+            "مهندسی کامپیوتر", "مهندسی برق", "مهندسی صنایع", "مهندسی مکانیک",
+            "علوم کامپیوتر", "مدیریت / MBA", "مهندسی عمران", "سایر"
+        ]
+        for m in majors:
+            db.add(models.Major(name=m))
+
+        cities = ["تهران", "اصفهان", "شیراز", "مشهد", "تبریز", "کرج", "اهواز", "قم", "رشت", "دورکاری"]
+        for c in cities:
+            db.add(models.City(name=c))
+
+        categories = ["توسعه نرم‌افزار", "طراحی UI/UX", "دیجیتال مارکتینگ", "هوش مصنوعی و داده", "شبکه و امنیت", "مدیریت و صنایع"]
+        for cat in categories:
+            db.add(models.Category(name=cat))
+
+        skills = [
+            "Flutter", "Dart", "Python", "React", "JavaScript", "SQL", "Figma",
+            "UI/UX", "Django", "FastAPI", "Node.js", "C++", "Java", "Git", "Docker"
+        ]
+        for s in skills:
+            db.add(models.Skill(name=s))
 
         student_user = models.User(
             email="amir@gmail.com",
@@ -57,7 +83,8 @@ def reset_and_seed_db():
         company = models.Company(
             name="شرکت تکنولوژی داده‌پردازان",
             national_id="1010389400",
-            address="تهران، خیابان آزادی، پلاک ۱۲"
+            address="تهران، خیابان آزادی، پلاک ۱۲",
+            about="شرکت پیشرو در زمینه تولید نرم‌افزارهای مالی و اتوماسیون اداری."
         )
         db.add(company)
         db.commit()
@@ -72,48 +99,28 @@ def reset_and_seed_db():
         project1 = models.Project(
             company_id=company.id,
             title="توسعه اپلیکیشن موبایل با فلاتر (Flutter)",
-            description="پیاده‌سازی رابط کاربری داشبورد و اتصال به APIهای FastAPI. نیازمند تسلط بر فلاتر و مدیریت استیت.",
+            description="پیاده‌سازی رابط کاربری داشبورد و اتصال به APIهای FastAPI جابینجایی.",
             required_skills=["Flutter", "Dart", "REST API"],
-            deadline=datetime.utcnow() + timedelta(days=30),
+            deadline="1405/05/20",
             project_type="کارآموزی",
+            city="تهران",
+            category="توسعه نرم‌افزار",
+            target_universities=["دانشگاه تهران", "دانشگاه صنعتی شریف"],
+            target_majors=["مهندسی کامپیوتر"],
             requires_interview=True,
             weights={
-                "university_weight": 0.25,
-                "major_weight": 0.25,
-                "skills_weight": 0.30,
-                "courses_weight": 0.20
-            }
-        )
-
-        project2 = models.Project(
-            company_id=company.id,
-            title="تحلیل داده و طراحی الگوریتم با پایتون",
-            description="تحلیل داده‌های مشتریان و بهینه‌سازی کوئری‌های SQL به همراه ساخت داشبورد مدیریت نمرات.",
-            required_skills=["Python", "SQL", "Pandas"],
-            deadline=datetime.utcnow() + timedelta(days=45),
-            project_type="پروژه",
-            requires_interview=True,
-            weights={
-                "university_weight": 0.20,
-                "major_weight": 0.20,
-                "skills_weight": 0.40,
-                "courses_weight": 0.20
+                "university_weight": 0.35,
+                "major_weight": 0.35,
+                "skills_weight": 0.30
             }
         )
 
         db.add(project1)
-        db.add(project2)
         db.commit()
-
-        print("\n🎉 دیتابیس ریست شد و ۲ پروژه نمونه اولیه ثبت گردید!")
-        print("==================================================")
-        print("🎓 اکانت دانشجو:   amir@gmail.com | رمز: amir")
-        print("🏢 اکانت کارفرما:  psp@gmail.com  | رمز: amir")
-        print("==================================================\n")
 
     except Exception as e:
         db.rollback()
-        print(f"❌ خطا: {e}")
+        print(f"Error: {e}")
     finally:
         db.close()
 

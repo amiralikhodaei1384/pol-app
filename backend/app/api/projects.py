@@ -1,8 +1,7 @@
-import os
-import uuid
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
+import uuid
 
 from ..db.session import get_db
 from ..models import models
@@ -11,54 +10,23 @@ from .auth import get_current_user
 
 router = APIRouter()
 
-# Form options shared with the client.
-UNIVERSITIES = [
-    "دانشگاه تهران", "دانشگاه صنعتی شریف", "دانشگاه صنعتی امیرکبیر",
-    "دانشگاه علم و صنعت", "دانشگاه شهید بهشتی", "دانشگاه خواجه نصیر",
-    "دانشگاه علامه طباطبایی", "دانشگاه اصفهان", "دانشگاه شیراز", "سایر"
-]
-MAJORS = [
-    "مهندسی کامپیوتر", "مهندسی برق", "مهندسی صنایع", "مهندسی مکانیک",
-    "علوم کامپیوتر", "مدیریت / MBA", "مهندسی عمران", "سایر"
-]
-CITIES = ["تهران", "اصفهان", "شیراز", "مشهد", "تبریز", "کرج", "اهواز", "قم", "رشت", "دورکاری"]
-CATEGORIES = ["توسعه نرم‌افزار", "طراحی UI/UX", "دیجیتال مارکتینگ", "هوش مصنوعی و داده", "شبکه و امنیت", "مدیریت و صنایع"]
-SKILLS = [
-    "Flutter", "Dart", "Python", "React", "JavaScript", "SQL", "Figma",
-    "UI/UX", "Django", "FastAPI", "Node.js", "C++", "Java", "Git",
-    "Docker", "هوش مصنوعی / ML", "دیجیتال مارکتینگ", "ICDL / آفیس"
-]
-CHAT_UPLOAD_DIR = "uploads/chat"
-os.makedirs(CHAT_UPLOAD_DIR, exist_ok=True)
+@router.get("/options")
+def get_options(db: Session = Depends(get_db)):
+    universities = [u.name for u in db.query(models.University).all()]
+    majors = [m.name for m in db.query(models.Major).all()]
+    cities = [c.name for c in db.query(models.City).all()]
+    categories = [c.name for c in db.query(models.Category).all()]
+    skills = [s.name for s in db.query(models.Skill).all()]
 
-@router.post("/chat/upload-file")
-async def upload_chat_file(
-        file: UploadFile = File(...),
-        current_user: models.User = Depends(get_current_user)
-):
-    """Store a chat attachment and return its URL and type."""
-    file_ext = os.path.splitext(file.filename)[1].lower()
-    is_image = file_ext in [".png", ".jpg", ".jpeg", ".webp", ".gif"]
-    file_type = "image" if is_image else "document"
-
-    safe_filename = file.filename.replace(' ', '_')
-    new_filename = f"Chat_{uuid.uuid4().hex[:8]}_{safe_filename}"
-    file_path = os.path.join(CHAT_UPLOAD_DIR, new_filename)
-
-    with open(file_path, "wb") as f:
-        content = await file.read()
-        f.write(content)
-
-    relative_url = f"/uploads/chat/{new_filename}"
     return {
-        "file_url": relative_url,
-        "file_name": file.filename,
-        "file_type": file_type
+        "universities": universities,
+        "majors": majors,
+        "cities": cities,
+        "categories": categories,
+        "skills": skills
     }
 
-
 def calculate_match_score(student_profile: models.StudentProfile, project: models.Project) -> int:
-    """Score how well a student fits a project, clamped to 35-98."""
     if not student_profile:
         return 50
 
@@ -126,20 +94,11 @@ def calculate_match_score(student_profile: models.StudentProfile, project: model
 
     return max(35, min(98, round(final_score)))
 
-@router.get("/options")
-def get_options():
-    return {
-        "universities": UNIVERSITIES,
-        "majors": MAJORS,
-        "skills": SKILLS,
-        "cities": CITIES,
-        "categories": CATEGORIES
-    }
-
 @router.get("/recommended")
 def get_recommended_projects(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    """Active projects scoring 60+ for the student, best matches first."""
-    if current_user.role != models.UserRole.STUDENT or not current_user.student_profile: return []
+    if current_user.role != models.UserRole.STUDENT or not current_user.student_profile:
+        return []
+
     p_profile = current_user.student_profile
     all_p = db.query(models.Project).filter(models.Project.is_active == True).all()
 
@@ -147,12 +106,24 @@ def get_recommended_projects(db: Session = Depends(get_db), current_user: models
     for p in all_p:
         score = calculate_match_score(p_profile, p)
         if score >= 60:
-            is_applied = db.query(models.Application).filter(models.Application.student_id == current_user.id, models.Application.project_id == p.id).first() is not None
+            is_applied = db.query(models.Application).filter(
+                models.Application.student_id == current_user.id,
+                models.Application.project_id == p.id
+            ).first() is not None
+
             recommended.append({
-                "id": str(p.id), "title": p.title, "description": p.description, "required_skills": p.required_skills,
-                "deadline": p.deadline.isoformat() if p.deadline else None, "project_type": p.project_type, "city": getattr(p, 'city', 'تهران'),
-                "company_name": p.company.name if p.company else "شرکت فناوری", "match_score": score, "is_applied": is_applied
+                "id": str(p.id),
+                "title": p.title,
+                "description": p.description,
+                "required_skills": p.required_skills,
+                "deadline": str(p.deadline) if p.deadline else "نامشخص",
+                "project_type": p.project_type,
+                "city": getattr(p, 'city', 'تهران') or "تهران",
+                "company_name": p.company.name if p.company else "شرکت فناوری",
+                "match_score": score,
+                "is_applied": is_applied
             })
+
     recommended.sort(key=lambda x: x["match_score"], reverse=True)
     return recommended
 
@@ -160,11 +131,16 @@ def get_recommended_projects(db: Session = Depends(get_db), current_user: models
 def get_my_projects(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     if current_user.role != models.UserRole.COMPANY_REP or not current_user.company_rep_profile:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="دسترسی غیرمجاز")
+
     company_id = current_user.company_rep_profile.company_id
     projects = db.query(models.Project).filter(models.Project.company_id == company_id).order_by(models.Project.created_at.desc()).all()
+
     for p in projects:
-        if not getattr(p, 'city', None): p.city = "تهران"
-        if not getattr(p, 'category', None): p.category = "توسعه نرم‌افزار"
+        if not getattr(p, 'city', None):
+            p.city = "تهران"
+        if not getattr(p, 'category', None):
+            p.category = "توسعه نرم‌افزار"
+
     return projects
 
 @router.get("/my-applications")
@@ -203,13 +179,13 @@ def get_my_applications(db: Session = Depends(get_db), current_user: models.User
                 "interview_note": app.interview_note,
             })
     return result
+
 @router.get("/company-applications")
 def get_company_applications(
         project_id: Optional[str] = None,
         db: Session = Depends(get_db),
         current_user: models.User = Depends(get_current_user)
 ):
-    """Applicants for the employer's projects, optionally for one project."""
     if current_user.role != models.UserRole.COMPANY_REP or not current_user.company_rep_profile:
         raise HTTPException(status_code=403, detail="دسترسی غیرمجاز")
 
@@ -218,6 +194,7 @@ def get_company_applications(
     project_ids = [p.id for p in company_projects]
 
     query = db.query(models.Application).filter(models.Application.project_id.in_(project_ids))
+
     if project_id and project_id.strip():
         query = query.filter(models.Application.project_id == project_id)
 
@@ -262,7 +239,6 @@ def get_all_projects(
         db: Session = Depends(get_db),
         current_user: models.User = Depends(get_current_user)
 ):
-    """List projects with optional multi-select filters."""
     query = db.query(models.Project).filter(models.Project.is_active == True)
 
     if project_type and project_type != "همه":
@@ -331,19 +307,28 @@ def get_all_projects(
         result.append(p_dict)
 
     result.sort(key=lambda x: x["match_score"], reverse=True)
-
     return result
 
 @router.post("/", response_model=schemas.ProjectOut, status_code=status.HTTP_201_CREATED)
 def create_project(project_in: schemas.ProjectCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    if current_user.role != models.UserRole.COMPANY_REP: raise HTTPException(status_code=403, detail="تنها کارفرما مجاز است.")
-    if not current_user.company_rep_profile or not current_user.company_rep_profile.company_id: raise HTTPException(status_code=400, detail="اطلاعات شرکت یافت نشد.")
+    if current_user.role != models.UserRole.COMPANY_REP:
+        raise HTTPException(status_code=403, detail="تنها کارفرما مجاز است.")
+    if not current_user.company_rep_profile or not current_user.company_rep_profile.company_id:
+        raise HTTPException(status_code=400, detail="اطلاعات شرکت یافت نشد.")
+
     company_id = current_user.company_rep_profile.company_id
     new_project = models.Project(
-        company_id=company_id, title=project_in.title, description=project_in.description,
-        required_skills=project_in.required_skills, deadline=project_in.deadline, project_type=project_in.project_type.value if hasattr(project_in.project_type, 'value') else project_in.project_type,
-        city=project_in.city, category=project_in.category, target_universities=project_in.target_universities,
-        target_majors=project_in.target_majors, requires_interview=project_in.requires_interview,
+        company_id=company_id,
+        title=project_in.title,
+        description=project_in.description,
+        required_skills=project_in.required_skills,
+        deadline=project_in.deadline,
+        project_type=project_in.project_type.value if hasattr(project_in.project_type, 'value') else project_in.project_type,
+        city=project_in.city,
+        category=project_in.category,
+        target_universities=project_in.target_universities,
+        target_majors=project_in.target_majors,
+        requires_interview=project_in.requires_interview,
         weights=project_in.weights.model_dump() if project_in.weights else None
     )
     db.add(new_project)
@@ -353,34 +338,26 @@ def create_project(project_in: schemas.ProjectCreate, db: Session = Depends(get_
 
 @router.post("/applications/{app_id}/schedule-interview")
 def schedule_interview(app_id: str, body: schemas.ScheduleInterviewSchema, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    """Invite an applicant to an interview and notify them."""
     app_obj = db.query(models.Application).filter(models.Application.id == app_id).first()
-    if not app_obj: raise HTTPException(status_code=404, detail="درخواست یافت نشد.")
-
+    if not app_obj:
+        raise HTTPException(status_code=404, detail="درخواست یافت نشد.")
     app_obj.status = models.ApplicationStatus.SHORTLISTED
     app_obj.interview_date = body.interview_date
     app_obj.interview_address = body.interview_address
     app_obj.interview_note = body.interview_note
-
-    notif = models.Notification(
-        user_id=app_obj.student_id,
-        title="دعوت به مصاحبه حضوری",
-        message=f"شما برای پروژه «{app_obj.project.title if app_obj.project else ''}» به مصاحبه حضوری دعوت شدید. تاریخ: {body.interview_date}",
-        type="interview",
-        link_id=str(app_obj.project_id)
-    )
-    db.add(notif)
-
     db.commit()
     return {"message": "دعوت به مصاحبه ثبت شد."}
 
 @router.post("/chat/start")
 def start_chat(app_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    if current_user.role != models.UserRole.COMPANY_REP: raise HTTPException(status_code=403, detail="تنها کارفرما مجاز به شروع چت است.")
+    if current_user.role != models.UserRole.COMPANY_REP:
+        raise HTTPException(status_code=403, detail="تنها کارفرما مجاز به شروع چت است.")
     app_obj = db.query(models.Application).filter(models.Application.id == app_id).first()
-    if not app_obj: raise HTTPException(status_code=404, detail="درخواست یافت نشد.")
+    if not app_obj:
+        raise HTTPException(status_code=404, detail="درخواست یافت نشد.")
     existing_thread = db.query(models.ChatThread).filter(models.ChatThread.application_id == app_obj.id).first()
-    if existing_thread: return {"thread_id": str(existing_thread.id)}
+    if existing_thread:
+        return {"thread_id": str(existing_thread.id)}
     new_thread = models.ChatThread(application_id=app_obj.id, employer_id=current_user.id, student_id=app_obj.student_id)
     db.add(new_thread)
     db.commit()
@@ -398,6 +375,62 @@ def get_chat_threads(db: Session = Depends(get_db), current_user: models.User = 
             other_name = app_obj.student.student_profile.full_name or "دانشجو"
         res.append({"thread_id": str(t.id), "title": app_obj.project.title if (app_obj and app_obj.project) else "گفتگو", "other_party": other_name})
     return res
+
+@router.get("/chat/messages/{thread_id}")
+def get_messages(thread_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    try:
+        t_uuid = uuid.UUID(thread_id)
+    except ValueError:
+        t_uuid = thread_id
+
+    unread_msgs = db.query(models.ChatMessage).filter(
+        models.ChatMessage.thread_id == t_uuid,
+        models.ChatMessage.sender_id != current_user.id,
+        models.ChatMessage.is_read == False
+    ).all()
+
+    if unread_msgs:
+        for msg in unread_msgs:
+            msg.is_read = True
+        db.commit()
+
+    msgs = db.query(models.ChatMessage).filter(models.ChatMessage.thread_id == t_uuid).order_by(models.ChatMessage.created_at.asc()).all()
+
+    return [{
+        "id": str(m.id),
+        "sender_id": str(m.sender_id),
+        "is_me": (str(m.sender_id) == str(current_user.id)),
+        "text": m.text or "",
+        "file_url": m.file_url,
+        "file_type": m.file_type,
+        "file_name": m.file_name,
+        "is_read": bool(m.is_read),
+        "is_edited": getattr(m, 'is_edited', False),
+        "created_at": m.created_at.strftime("%H:%M") if m.created_at else ""
+    } for m in msgs]
+
+@router.post("/chat/send")
+def send_message(body: schemas.SendMessageSchema, db: Session = Depends(get_db), user: models.User = Depends(get_current_user)):
+    msg = models.ChatMessage(thread_id=body.thread_id, sender_id=user.id, text=body.text)
+    db.add(msg)
+
+    thread = db.query(models.ChatThread).filter(models.ChatThread.id == body.thread_id).first()
+    if thread:
+        recipient_id = thread.student_id if user.id == thread.employer_id else thread.employer_id
+        sender_name = "کارفرما" if user.role == models.UserRole.COMPANY_REP else (user.student_profile.full_name if (user.student_profile and user.student_profile.full_name) else "دانشجو")
+
+        msg_preview = f"فایل پیوست: {body.file_name}" if body.file_url else (body.text[:35] if body.text else "پیام جدید")
+        notif = models.Notification(
+            user_id=recipient_id,
+            title="پیام جدید در چت",
+            message=f"پیام جدید از طرف {sender_name}: {msg_preview}",
+            type="chat",
+            link_id=str(thread.id)
+        )
+        db.add(notif)
+
+    db.commit()
+    return {"message": "پیام ارسال شد."}
 
 @router.put("/chat/messages/{message_id}")
 def edit_chat_message(
@@ -422,158 +455,6 @@ def edit_chat_message(
     msg.is_edited = True
     db.commit()
     return {"message": "پیام با موفقیت ویرایش شد."}
-
-
-@router.get("/chat/messages/{thread_id}")
-def get_messages(
-        thread_id: str,
-        db: Session = Depends(get_db),
-        current_user: models.User = Depends(get_current_user)
-):
-    """Return thread messages and mark incoming ones as seen."""
-    try:
-        t_uuid = uuid.UUID(thread_id)
-    except ValueError:
-        t_uuid = thread_id
-
-    db.query(models.ChatMessage).filter(
-        models.ChatMessage.thread_id == t_uuid,
-        models.ChatMessage.sender_id != current_user.id,
-        models.ChatMessage.is_read == False
-    ).update({"is_read": True}, synchronize_session=False)
-    db.commit()
-
-    msgs = db.query(models.ChatMessage).filter(
-        models.ChatMessage.thread_id == t_uuid
-    ).order_by(models.ChatMessage.created_at.asc()).all()
-
-    return [{
-        "id": str(m.id),
-        "sender_id": str(m.sender_id),
-        "is_me": (str(m.sender_id) == str(current_user.id)),
-        "text": m.text or "",
-        "file_url": m.file_url,
-        "file_type": m.file_type,
-        "file_name": m.file_name,
-        "is_read": bool(m.is_read),
-        "is_edited": getattr(m, 'is_edited', False),
-        "created_at": m.created_at.strftime("%H:%M") if m.created_at else ""
-    } for m in msgs]
-
-@router.post("/chat/send")
-def send_message(body: schemas.SendMessageSchema, db: Session = Depends(get_db), user: models.User = Depends(get_current_user)):
-    msg = models.ChatMessage(
-        thread_id=body.thread_id,
-        sender_id=user.id,
-        text=body.text,
-        file_url=body.file_url,
-        file_type=body.file_type,
-        file_name=body.file_name
-    )
-    db.add(msg)
-
-    thread = db.query(models.ChatThread).filter(models.ChatThread.id == body.thread_id).first()
-    if thread:
-        recipient_id = thread.student_id if user.id == thread.employer_id else thread.employer_id
-        sender_name = "کارفرما" if user.role == models.UserRole.COMPANY_REP else (user.student_profile.full_name if (user.student_profile and user.student_profile.full_name) else "دانشجو")
-
-        msg_preview = f"فایل پیوست: {body.file_name}" if body.file_url else (body.text[:35] if body.text else "پیام جدید")
-        notif = models.Notification(
-            user_id=recipient_id,
-            title="پیام جدید در چت",
-            message=f"پیام جدید از طرف {sender_name}: {msg_preview}",
-            type="chat",
-            link_id=str(thread.id)
-        )
-        db.add(notif)
-
-    db.commit()
-    return {"message": "پیام ارسال شد."}
-
-@router.post("/{project_id}/apply")
-def apply_for_project(
-        project_id: str,
-        body: Optional[schemas.ApplyProjectSchema] = None,
-        db: Session = Depends(get_db),
-        current_user: models.User = Depends(get_current_user)
-):
-    """Submit a student application and notify the employer."""
-    if current_user.role != models.UserRole.STUDENT:
-        raise HTTPException(status_code=403, detail="تنها دانشجویان مجاز به ارسال درخواست هستند.")
-
-    project = db.query(models.Project).filter(models.Project.id == project_id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="پروژه یافت نشد.")
-
-    if db.query(models.Application).filter(models.Application.student_id == current_user.id, models.Application.project_id == project.id).first():
-        raise HTTPException(status_code=400, detail="شما قبلاً برای این پروژه درخواست ارسال کرده‌اید.")
-
-    user_msg = body.message if body else None
-
-    new_app = models.Application(
-        student_id=current_user.id,
-        project_id=project.id,
-        message=user_msg,
-        status=models.ApplicationStatus.APPLIED
-    )
-    db.add(new_app)
-
-    employer_rep = db.query(models.CompanyRepresentative).filter(models.CompanyRepresentative.company_id == project.company_id).first()
-    if employer_rep:
-        student_name = current_user.student_profile.full_name if (current_user.student_profile and current_user.student_profile.full_name) else "یک دانشجو"
-        msg_preview = f" با پیام: «{user_msg[:30]}...»" if user_msg else ""
-        notif = models.Notification(
-            user_id=employer_rep.user_id,
-            title="درخواست جدید برای پروژه",
-            message=f"{student_name} برای پروژه «{project.title}» درخواست فرستاد{msg_preview}.",
-            type="application",
-            link_id=str(project.id)
-        )
-        db.add(notif)
-
-    db.commit()
-    return {"message": "درخواست شما با موفقیت ثبت شد."}
-
-
-@router.get("/notifications/counts")
-def get_notification_counts(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    """Return unread chat and notification counts."""
-    unread_notifs = db.query(models.Notification).filter(
-        models.Notification.user_id == current_user.id,
-        models.Notification.is_read == False
-    ).count()
-
-    unread_chats = db.query(models.Notification).filter(
-        models.Notification.user_id == current_user.id,
-        models.Notification.type == "chat",
-        models.Notification.is_read == False
-    ).count()
-
-    return {
-        "unread_notifications": unread_notifs,
-        "unread_chats": unread_chats
-    }
-
-@router.get("/notifications/")
-def get_notifications(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    notifs = db.query(models.Notification).filter(models.Notification.user_id == current_user.id).order_by(models.Notification.created_at.desc()).all()
-
-    res = []
-    for n in notifs:
-        res.append({
-            "id": str(n.id),
-            "title": n.title,
-            "message": n.message,
-            "type": n.type,
-            "link_id": n.link_id,
-            "is_read": n.is_read,
-            "created_at": n.created_at.strftime("%Y/%m/%d - %H:%M") if n.created_at else ""
-        })
-        n.is_read = True
-
-    db.commit()
-    return res
-
 
 @router.delete("/notifications/{notification_id}")
 def delete_notification(
@@ -635,3 +516,46 @@ def delete_project(
     db.delete(project)
     db.commit()
     return {"message": "پروژه با موفقیت حذف شد."}
+
+@router.post("/{project_id}/apply")
+def apply_for_project(
+        project_id: str,
+        body: Optional[schemas.ApplyProjectSchema] = None,
+        db: Session = Depends(get_db),
+        current_user: models.User = Depends(get_current_user)
+):
+    if current_user.role != models.UserRole.STUDENT:
+        raise HTTPException(status_code=403, detail="تنها دانشجویان مجاز به ارسال درخواست هستند.")
+
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="پروژه یافت نشد.")
+
+    if db.query(models.Application).filter(models.Application.student_id == current_user.id, models.Application.project_id == project.id).first():
+        raise HTTPException(status_code=400, detail="شما قبلاً برای این پروژه درخواست ارسال کرده‌اید.")
+
+    user_msg = body.message if body else None
+
+    new_app = models.Application(
+        student_id=current_user.id,
+        project_id=project.id,
+        message=user_msg,
+        status=models.ApplicationStatus.APPLIED
+    )
+    db.add(new_app)
+
+    employer_rep = db.query(models.CompanyRepresentative).filter(models.CompanyRepresentative.company_id == project.company_id).first()
+    if employer_rep:
+        student_name = current_user.student_profile.full_name if (current_user.student_profile and current_user.student_profile.full_name) else "یک دانشجو"
+        msg_preview = f" با پیام: «{user_msg[:30]}...»" if user_msg else ""
+        notif = models.Notification(
+            user_id=employer_rep.user_id,
+            title="درخواست جدید برای پروژه",
+            message=f"{student_name} برای پروژه «{project.title}» درخواست فرستاد{msg_preview}.",
+            type="application",
+            link_id=str(project.id)
+        )
+        db.add(notif)
+
+    db.commit()
+    return {"message": "درخواست شما با موفقیت ثبت شد."}
