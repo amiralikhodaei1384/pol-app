@@ -8,6 +8,7 @@ import 'package:pol_app/employer_applications_page.dart';
 import 'package:pol_app/chat_threads_page.dart';
 import 'package:pol_app/company_profile_page.dart';
 import 'package:pol_app/notifications_page.dart';
+import 'package:pol_app/notification_poller.dart';
 import 'package:pol_app/login_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -53,6 +54,31 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
   void initState() {
     super.initState();
     _loadDashboardData();
+    NotificationPoller.instance.addListener(_onCountsChanged);
+    NotificationPoller.instance.start();
+  }
+
+  @override
+  void dispose() {
+    NotificationPoller.instance.removeListener(_onCountsChanged);
+    super.dispose();
+  }
+
+  void _onCountsChanged() {
+    if (!mounted) return;
+    final poller = NotificationPoller.instance;
+    setState(() {
+      _unreadNotificationsCount = poller.unreadNotifications;
+      _unreadChatsCount = poller.unreadChats;
+    });
+    if (poller.newArrivals > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('اعلان جدید دارید'),
+          action: SnackBarAction(label: 'مشاهده', onPressed: _openNotifications),
+        ),
+      );
+    }
   }
 
   Future<void> _loadDashboardData() async {
@@ -67,15 +93,8 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     final applications = await ApiService.fetchMyApplications(token);
 
     if (token.isNotEmpty) {
-      final counts = await ApiService.fetchNotificationCounts(token);
+      NotificationPoller.instance.refresh();
       final userData = await ApiService.getMe(token);
-
-      if (mounted) {
-        setState(() {
-          _unreadNotificationsCount = counts['unread_notifications'] ?? 0;
-          _unreadChatsCount = counts['unread_chats'] ?? 0;
-        });
-      }
 
       if (userData != null) {
         _email = userData['email'] ?? '';
@@ -118,6 +137,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
   }
 
   Future<void> _logout() async {
+    NotificationPoller.instance.stop();
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
 
@@ -839,6 +859,31 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
   void initState() {
     super.initState();
     _loadMyProjects();
+    NotificationPoller.instance.addListener(_onCountsChanged);
+    NotificationPoller.instance.start();
+  }
+
+  @override
+  void dispose() {
+    NotificationPoller.instance.removeListener(_onCountsChanged);
+    super.dispose();
+  }
+
+  void _onCountsChanged() {
+    if (!mounted) return;
+    final poller = NotificationPoller.instance;
+    setState(() {
+      _unreadNotificationsCount = poller.unreadNotifications;
+      _unreadChatsCount = poller.unreadChats;
+    });
+    if (poller.newArrivals > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('اعلان جدید دارید'),
+          action: SnackBarAction(label: 'مشاهده', onPressed: _openNotifications),
+        ),
+      );
+    }
   }
 
   Future<void> _loadMyProjects() async {
@@ -849,15 +894,8 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
     final projects = await ApiService.fetchMyProjects(token);
 
     if (token.isNotEmpty) {
-      final counts = await ApiService.fetchNotificationCounts(token);
+      NotificationPoller.instance.refresh();
       final userData = await ApiService.getMe(token);
-
-      if (mounted) {
-        setState(() {
-          _unreadNotificationsCount = counts['unread_notifications'] ?? 0;
-          _unreadChatsCount = counts['unread_chats'] ?? 0;
-        });
-      }
 
       if (userData != null && userData['company'] != null) {
         final c = userData['company'];
@@ -907,6 +945,7 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
   }
 
   Future<void> _logout() async {
+    NotificationPoller.instance.stop();
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
 

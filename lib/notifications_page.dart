@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:pol_app/api_service.dart';
 import 'package:pol_app/chat_page.dart';
 import 'package:pol_app/dashboard_page.dart';
 import 'package:pol_app/employer_applications_page.dart';
+import 'package:pol_app/notification_poller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Lists the user's notifications.
@@ -16,15 +18,23 @@ class NotificationsPage extends StatefulWidget {
 class _NotificationsPageState extends State<NotificationsPage> {
   List<dynamic> _notifications = [];
   bool _isLoading = true;
+  Timer? _pollingTimer;
 
   @override
   void initState() {
     super.initState();
     _loadNotifications();
+    _pollingTimer = Timer.periodic(NotificationPoller.interval, (_) => _loadNotifications(silent: true));
   }
 
-  Future<void> _loadNotifications() async {
-    setState(() => _isLoading = true);
+  @override
+  void dispose() {
+    _pollingTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadNotifications({bool silent = false}) async {
+    if (!silent) setState(() => _isLoading = true);
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token') ?? '';
 

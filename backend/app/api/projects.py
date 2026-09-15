@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import uuid
+import re
+import os
 
 from ..db.session import get_db
 from ..models import models
@@ -10,13 +12,44 @@ from .auth import get_current_user
 
 router = APIRouter()
 
+UPLOAD_DIR = "uploads/resumes"
+CHAT_UPLOAD_DIR = "uploads/chat"
+
+UNIVERSITIES = [
+    "دانشگاه تهران", "دانشگاه صنعتی شریف", "دانشگاه صنعتی امیرکبیر",
+    "دانشگاه علم و صنعت", "دانشگاه شهید بهشتی", "دانشگاه خواجه نصیر",
+    "دانشگاه علامه طباطبایی", "دانشگاه اصفهان", "دانشگاه شیراز", "سایر"
+]
+MAJORS = [
+    "مهندسی کامپیوتر", "مهندسی برق", "مهندسی صنایع", "مهندسی مکانیک",
+    "علوم کامپیوتر", "مدیریت / MBA", "مهندسی عمران", "سایر"
+]
+SKILLS = [
+    "Flutter", "Dart", "Python", "React", "JavaScript", "SQL", "Figma",
+    "UI/UX", "Django", "FastAPI", "Node.js", "C++", "Java", "Git", "Docker"
+]
+CITIES = ["تهران", "اصفهان", "شیراز", "مشهد", "تبریز", "کرج", "اهواز", "قم", "رشت", "دورکاری"]
+CATEGORIES = ["توسعه نرم‌افزار", "طراحی UI/UX", "دیجیتال مارکتینگ", "هوش مصنوعی و داده", "شبکه و امنیت", "مدیریت و صنایع"]
+
+# Only adds to the session: the caller's commit saves the notification together with the change it describes.
+def send_notification(db: Session, user_id, title: str, message: str, notif_type: str, link_id: str = None):
+    target_uuid = uuid.UUID(str(user_id)) if not isinstance(user_id, uuid.UUID) else user_id
+    db.add(models.Notification(
+        user_id=target_uuid,
+        title=title,
+        message=message,
+        type=notif_type,
+        link_id=str(link_id) if link_id else None,
+        is_read=False
+    ))
+
 @router.get("/options")
 def get_options(db: Session = Depends(get_db)):
-    universities = [u.name for u in db.query(models.University).all()]
-    majors = [m.name for m in db.query(models.Major).all()]
-    cities = [c.name for c in db.query(models.City).all()]
-    categories = [c.name for c in db.query(models.Category).all()]
-    skills = [s.name for s in db.query(models.Skill).all()]
+    universities = [u.name for u in db.query(models.University).all()] or UNIVERSITIES
+    majors = [m.name for m in db.query(models.Major).all()] or MAJORS
+    cities = [c.name for c in db.query(models.City).all()] or CITIES
+    categories = [c.name for c in db.query(models.Category).all()] or CATEGORIES
+    skills = [s.name for s in db.query(models.Skill).all()] or SKILLS
 
     return {
         "universities": universities,
@@ -25,6 +58,44 @@ def get_options(db: Session = Depends(get_db)):
         "categories": categories,
         "skills": skills
     }
+
+@router.get("/notifications/counts")
+def get_notification_counts(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    unread_notifs = db.query(models.Notification).filter(
+        models.Notification.user_id == current_user.id,
+        models.Notification.is_read == False
+    ).count()
+
+    unread_chats = db.query(models.Notification).filter(
+        models.Notification.user_id == current_user.id,
+        models.Notification.type == "chat",
+        models.Notification.is_read == False
+    ).count()
+
+    return {
+        "unread_notifications": unread_notifs,
+        "unread_chats": unread_chats
+    }
+
+@router.get("/notifications/")
+def get_notifications(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    notifs = db.query(models.Notification).filter(models.Notification.user_id == current_user.id).order_by(models.Notification.created_at.desc()).all()
+
+    res = []
+    for n in notifs:
+        res.append({
+            "id": str(n.id),
+            "title": n.title,
+            "message": n.message,
+            "type": n.type,
+            "link_id": n.link_id,
+            "is_read": n.is_read,
+            "created_at": n.created_at.strftime("%Y/%m/%d - %H:%M") if n.created_at else ""
+        })
+        n.is_read = True
+
+    db.commit()
+    return res
 
 def calculate_match_score(student_profile: models.StudentProfile, project: models.Project) -> int:
     if not student_profile:
@@ -116,10 +187,10 @@ def get_recommended_projects(db: Session = Depends(get_db), current_user: models
                 "title": p.title,
                 "description": p.description,
                 "required_skills": p.required_skills,
-                "deadline": str(p.deadline) if p.deadline else "نامشخص",
+                "deadline": str(p.deadline) if p.deadline else "",
                 "project_type": p.project_type,
-                "city": getattr(p, 'city', 'تهران') or "تهران",
-                "company_name": p.company.name if p.company else "شرکت فناوری",
+                "city": p.city,
+                "company_name": p.company.name if p.company else "",
                 "match_score": score,
                 "is_applied": is_applied
             })
@@ -134,12 +205,6 @@ def get_my_projects(db: Session = Depends(get_db), current_user: models.User = D
 
     company_id = current_user.company_rep_profile.company_id
     projects = db.query(models.Project).filter(models.Project.company_id == company_id).order_by(models.Project.created_at.desc()).all()
-
-    for p in projects:
-        if not getattr(p, 'city', None):
-            p.city = "تهران"
-        if not getattr(p, 'category', None):
-            p.category = "توسعه نرم‌افزار"
 
     return projects
 
@@ -171,8 +236,8 @@ def get_my_applications(db: Session = Depends(get_db), current_user: models.User
                 "created_at": app.created_at.strftime("%Y/%m/%d") if app.created_at else "",
                 "project_id": str(project.id),
                 "title": project.title,
-                "company_name": project.company.name if project.company else "شرکت فناوری",
-                "city": getattr(project, 'city', 'تهران') or "تهران",
+                "company_name": project.company.name if project.company else "",
+                "city": project.city,
                 "project_type": project.project_type,
                 "interview_date": app.interview_date,
                 "interview_address": app.interview_address,
@@ -208,10 +273,10 @@ def get_company_applications(
         res.append({
             "application_id": str(a.id),
             "project_title": a.project.title if a.project else "",
-            "student_name": sp.full_name if (sp and sp.full_name) else "دانشجوی جدید",
-            "student_phone": sp.phone if sp else "نامشخص",
-            "student_university": sp.university if (sp and sp.university) else "نامشخص",
-            "student_major": sp.major if (sp and sp.major) else "نامشخص",
+            "student_name": sp.full_name if (sp and sp.full_name) else "",
+            "student_phone": sp.phone if sp else "",
+            "student_university": sp.university if (sp and sp.university) else "",
+            "student_major": sp.major if (sp and sp.major) else "",
             "student_skills": sp.skills if sp else [],
             "student_educations": sp.educations if sp else [],
             "student_work_experiences": sp.work_experiences if sp else [],
@@ -281,14 +346,14 @@ def get_all_projects(
             "title": p.title,
             "description": p.description,
             "required_skills": p.required_skills,
-            "deadline": str(p.deadline) if p.deadline else "نامشخص",
+            "deadline": str(p.deadline) if p.deadline else "",
             "project_type": p.project_type,
-            "city": getattr(p, 'city', 'تهران') or "تهران",
-            "category": getattr(p, 'category', 'توسعه نرم‌افزار') or "توسعه نرم‌افزار",
+            "city": p.city,
+            "category": p.category,
             "target_universities": p.target_universities or [],
             "target_majors": p.target_majors or [],
             "requires_interview": p.requires_interview,
-            "company_name": p.company.name if p.company else "شرکت فناوری",
+            "company_name": p.company.name if p.company else "",
             "company_about": p.company.about if (p.company and getattr(p.company, 'about', None)) else "",
             "company_website": p.company.website if (p.company and getattr(p.company, 'website', None)) else "",
             "company_address": p.company.address if (p.company and getattr(p.company, 'address', None)) else "",
@@ -338,20 +403,36 @@ def create_project(project_in: schemas.ProjectCreate, db: Session = Depends(get_
 
 @router.post("/applications/{app_id}/schedule-interview")
 def schedule_interview(app_id: str, body: schemas.ScheduleInterviewSchema, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    app_obj = db.query(models.Application).filter(models.Application.id == app_id).first()
+    try:
+        a_uuid = uuid.UUID(app_id)
+    except ValueError:
+        a_uuid = app_id
+
+    app_obj = db.query(models.Application).filter(models.Application.id == a_uuid).first()
     if not app_obj:
         raise HTTPException(status_code=404, detail="درخواست یافت نشد.")
+
     app_obj.status = models.ApplicationStatus.SHORTLISTED
     app_obj.interview_date = body.interview_date
     app_obj.interview_address = body.interview_address
     app_obj.interview_note = body.interview_note
+
+    send_notification(
+        db=db,
+        user_id=app_obj.student_id,
+        title="دعوت به مصاحبه حضوری",
+        message=f"شما برای پروژه «{app_obj.project.title if app_obj.project else ''}» به مصاحبه حضوری دعوت شدید. تاریخ: {body.interview_date}",
+        notif_type="interview",
+        link_id=str(app_obj.project_id)
+    )
+
     db.commit()
     return {"message": "دعوت به مصاحبه ثبت شد."}
 
 @router.post("/chat/start")
 def start_chat(app_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     if current_user.role != models.UserRole.COMPANY_REP:
-        raise HTTPException(status_code=403, detail="تنها کارفرما مجاز به شروع چت است.")
+        raise HTTPException(status_code=403, detail="تنها کارفرما مجاز است.")
     app_obj = db.query(models.Application).filter(models.Application.id == app_id).first()
     if not app_obj:
         raise HTTPException(status_code=404, detail="درخواست یافت نشد.")
@@ -360,6 +441,17 @@ def start_chat(app_id: str, db: Session = Depends(get_db), current_user: models.
         return {"thread_id": str(existing_thread.id)}
     new_thread = models.ChatThread(application_id=app_obj.id, employer_id=current_user.id, student_id=app_obj.student_id)
     db.add(new_thread)
+    db.flush()
+
+    send_notification(
+        db=db,
+        user_id=app_obj.student_id,
+        title="گفتگوی جدید با کارفرما",
+        message=f"کارفرما درباره پروژه «{app_obj.project.title if app_obj.project else ''}» یک گفتگو با شما شروع کرد.",
+        notif_type="chat",
+        link_id=str(new_thread.id)
+    )
+
     db.commit()
     db.refresh(new_thread)
     return {"thread_id": str(new_thread.id)}
@@ -389,10 +481,17 @@ def get_messages(thread_id: str, db: Session = Depends(get_db), current_user: mo
         models.ChatMessage.is_read == False
     ).all()
 
-    if unread_msgs:
-        for msg in unread_msgs:
-            msg.is_read = True
-        db.commit()
+    for msg in unread_msgs:
+        msg.is_read = True
+
+    # Opening the conversation clears its chat badge.
+    db.query(models.Notification).filter(
+        models.Notification.user_id == current_user.id,
+        models.Notification.type == "chat",
+        models.Notification.link_id == str(t_uuid),
+        models.Notification.is_read == False
+    ).update({"is_read": True}, synchronize_session=False)
+    db.commit()
 
     msgs = db.query(models.ChatMessage).filter(models.ChatMessage.thread_id == t_uuid).order_by(models.ChatMessage.created_at.asc()).all()
 
@@ -411,23 +510,30 @@ def get_messages(thread_id: str, db: Session = Depends(get_db), current_user: mo
 
 @router.post("/chat/send")
 def send_message(body: schemas.SendMessageSchema, db: Session = Depends(get_db), user: models.User = Depends(get_current_user)):
-    msg = models.ChatMessage(thread_id=body.thread_id, sender_id=user.id, text=body.text)
+    msg = models.ChatMessage(
+        thread_id=body.thread_id,
+        sender_id=user.id,
+        text=body.text,
+        file_url=body.file_url,
+        file_type=body.file_type,
+        file_name=body.file_name
+    )
     db.add(msg)
-
     thread = db.query(models.ChatThread).filter(models.ChatThread.id == body.thread_id).first()
     if thread:
-        recipient_id = thread.student_id if user.id == thread.employer_id else thread.employer_id
+        recipient_id = thread.student_id if str(user.id) == str(thread.employer_id) else thread.employer_id
+
         sender_name = "کارفرما" if user.role == models.UserRole.COMPANY_REP else (user.student_profile.full_name if (user.student_profile and user.student_profile.full_name) else "دانشجو")
 
         msg_preview = f"فایل پیوست: {body.file_name}" if body.file_url else (body.text[:35] if body.text else "پیام جدید")
-        notif = models.Notification(
+        send_notification(
+            db=db,
             user_id=recipient_id,
             title="پیام جدید در چت",
             message=f"پیام جدید از طرف {sender_name}: {msg_preview}",
-            type="chat",
+            notif_type="chat",
             link_id=str(thread.id)
         )
-        db.add(notif)
 
     db.commit()
     return {"message": "پیام ارسال شد."}
@@ -462,8 +568,13 @@ def delete_notification(
         db: Session = Depends(get_db),
         current_user: models.User = Depends(get_current_user)
 ):
+    try:
+        n_uuid = uuid.UUID(notification_id)
+    except ValueError:
+        n_uuid = notification_id
+
     notif = db.query(models.Notification).filter(
-        models.Notification.id == notification_id,
+        models.Notification.id == n_uuid,
         models.Notification.user_id == current_user.id
     ).first()
 
@@ -502,7 +613,7 @@ def delete_project(
         current_user: models.User = Depends(get_current_user)
 ):
     if current_user.role != models.UserRole.COMPANY_REP or not current_user.company_rep_profile:
-        raise HTTPException(status_code=403, detail="تنها کارفرما مجاز به حذف پروژه است.")
+        raise HTTPException(status_code=403, detail="تنها کارفرما مجاز است.")
 
     company_id = current_user.company_rep_profile.company_id
     project = db.query(models.Project).filter(
@@ -548,14 +659,14 @@ def apply_for_project(
     if employer_rep:
         student_name = current_user.student_profile.full_name if (current_user.student_profile and current_user.student_profile.full_name) else "یک دانشجو"
         msg_preview = f" با پیام: «{user_msg[:30]}...»" if user_msg else ""
-        notif = models.Notification(
+        send_notification(
+            db=db,
             user_id=employer_rep.user_id,
             title="درخواست جدید برای پروژه",
             message=f"{student_name} برای پروژه «{project.title}» درخواست فرستاد{msg_preview}.",
-            type="application",
+            notif_type="application",
             link_id=str(project.id)
         )
-        db.add(notif)
 
     db.commit()
     return {"message": "درخواست شما با موفقیت ثبت شد."}

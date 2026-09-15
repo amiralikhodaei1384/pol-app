@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:pol_app/api_service.dart';
 import 'package:pol_app/chat_page.dart';
+import 'package:pol_app/notification_poller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Lists the user's chat conversations.
@@ -14,15 +16,23 @@ class ChatThreadsPage extends StatefulWidget {
 class _ChatThreadsPageState extends State<ChatThreadsPage> {
   List<dynamic> _threads = [];
   bool _isLoading = true;
+  Timer? _pollingTimer;
 
   @override
   void initState() {
     super.initState();
     _loadThreads();
+    _pollingTimer = Timer.periodic(NotificationPoller.interval, (_) => _loadThreads(silent: true));
   }
 
-  Future<void> _loadThreads() async {
-    setState(() => _isLoading = true);
+  @override
+  void dispose() {
+    _pollingTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadThreads({bool silent = false}) async {
+    if (!silent) setState(() => _isLoading = true);
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token') ?? '';
 
