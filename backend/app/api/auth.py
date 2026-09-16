@@ -16,6 +16,45 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 UPLOAD_DIR = "uploads/resumes"
 
+# Weight of each student profile field in the completion percentage (sums to 100).
+PROFILE_COMPLETION_WEIGHTS = [
+    ("full_name", 15),
+    ("educations", 15),
+    ("skills", 15),
+    ("phone", 10),
+    ("courses", 10),
+    ("work_experiences", 10),
+    ("residence", 5),
+    ("birth_date", 5),
+    ("birth_place", 5),
+    ("resume_file", 5),
+    ("portfolio_links", 5),
+]
+
+
+def _has_value(value) -> bool:
+    """True when a profile field actually holds data."""
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, dict):
+        return any(_has_value(v) for v in value.values())
+    if isinstance(value, (list, tuple, set)):
+        return len(value) > 0
+    return True
+
+
+def calculate_profile_completion(profile) -> int:
+    """Return how much of a student profile is filled in, as a 0-100 percentage."""
+    if not profile:
+        return 0
+    return sum(
+        weight for field, weight in PROFILE_COMPLETION_WEIGHTS
+        if _has_value(getattr(profile, field, None))
+    )
+
+
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> models.User:
     """Return the authenticated user from the bearer token."""
     credentials_exception = HTTPException(
@@ -143,6 +182,7 @@ def get_me(current_user: models.User = Depends(get_current_user)):
             "work_experiences": p.work_experiences,
             "resume_file": p.resume_file,
             "portfolio_links": p.portfolio_links,
+            "completion_percentage": calculate_profile_completion(p),
         }
     elif current_user.role == models.UserRole.COMPANY_REP and current_user.company_rep_profile:
         c = current_user.company_rep_profile.company
@@ -210,6 +250,7 @@ async def upload_resume(
     relative_url = f"/uploads/resumes/{new_filename}"
     if profile:
         profile.resume_file = relative_url
+        profile.completion_percentage = calculate_profile_completion(profile)
         db.commit()
 
     return {
@@ -253,7 +294,7 @@ def update_student_profile(
         "github": profile_in.github_link,
         "figma": profile_in.figma_link
     }
-    profile.completion_percentage = 100
+    profile.completion_percentage = calculate_profile_completion(profile)
 
     db.commit()
     db.refresh(profile)

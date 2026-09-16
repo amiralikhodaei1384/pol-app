@@ -28,6 +28,13 @@ class _RegistrationPageState extends State<RegistrationPage> {
   final _nationalIdController = TextEditingController();
   final _companyAddressController = TextEditingController();
 
+  final _emailFocus = FocusNode();
+  final _companyNameFocus = FocusNode();
+  final _nationalIdFocus = FocusNode();
+  final _companyAddressFocus = FocusNode();
+  final _passwordFocus = FocusNode();
+  final _confirmPasswordFocus = FocusNode();
+
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _isCompany = false;
@@ -41,6 +48,12 @@ class _RegistrationPageState extends State<RegistrationPage> {
     _companyNameController.dispose();
     _nationalIdController.dispose();
     _companyAddressController.dispose();
+    _emailFocus.dispose();
+    _companyNameFocus.dispose();
+    _nationalIdFocus.dispose();
+    _companyAddressFocus.dispose();
+    _passwordFocus.dispose();
+    _confirmPasswordFocus.dispose();
     super.dispose();
   }
 
@@ -255,9 +268,12 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
           _buildTextField(
             controller: _emailController,
+            focusNode: _emailFocus,
+            autofocus: true,
             hint: _isCompany ? 'ایمیل سازمانی' : 'ایمیل دانشجویی',
             icon: _isCompany ? Icons.email_outlined : Icons.school_outlined,
             keyboardType: TextInputType.emailAddress,
+            onSubmitted: (_) => _nextStep(),
           ),
           const SizedBox(height: 24),
           _buildButton(text: 'مرحله بعد', onPressed: _nextStep),
@@ -290,22 +306,30 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
           _buildTextField(
             controller: _companyNameController,
+            focusNode: _companyNameFocus,
+            autofocus: true,
             hint: 'نام رسمی شرکت',
             icon: Icons.business_rounded,
+            onSubmitted: (_) => _nationalIdFocus.requestFocus(),
           ),
           const SizedBox(height: 12),
           _buildTextField(
             controller: _nationalIdController,
+            focusNode: _nationalIdFocus,
             hint: 'شناسه ملی شرکت (اختیاری)',
             icon: Icons.badge_outlined,
             keyboardType: TextInputType.number,
             validator: (value) => null,
+            onSubmitted: (_) => _companyAddressFocus.requestFocus(),
           ),
           const SizedBox(height: 12),
           _buildTextField(
             controller: _companyAddressController,
+            focusNode: _companyAddressFocus,
             hint: 'آدرس رسمی شرکت یا سازمان',
             icon: Icons.location_on_outlined,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _nextStep(),
           ),
           const SizedBox(height: 24),
           _buildButton(text: 'مرحله بعد', onPressed: _nextStep),
@@ -338,21 +362,29 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
           _buildTextField(
             controller: _passwordController,
+            focusNode: _passwordFocus,
+            autofocus: true,
             hint: 'رمز عبور',
             icon: Icons.lock_outline_rounded,
             isPassword: true,
             obscure: _obscurePassword,
             toggleVisibility: () => setState(() => _obscurePassword = !_obscurePassword),
+            onSubmitted: (_) => _confirmPasswordFocus.requestFocus(),
           ),
           const SizedBox(height: 12),
 
           _buildTextField(
             controller: _confirmPasswordController,
+            focusNode: _confirmPasswordFocus,
             hint: 'تکرار رمز عبور',
             icon: Icons.lock_reset_rounded,
             isPassword: true,
             obscure: _obscureConfirmPassword,
             toggleVisibility: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) {
+              if (!_isLoading) _handleRegister();
+            },
           ),
           const SizedBox(height: 24),
           _buildButton(text: 'تکمیل ثبت‌نام', onPressed: _isLoading ? null : _handleRegister, isLoading: _isLoading),
@@ -394,11 +426,19 @@ class _RegistrationPageState extends State<RegistrationPage> {
     TextInputType? keyboardType,
     TextEditingController? controller,
     String? Function(String?)? validator,
+    FocusNode? focusNode,
+    bool autofocus = false,
+    TextInputAction textInputAction = TextInputAction.next,
+    void Function(String)? onSubmitted,
   }) {
     return TextFormField(
       controller: controller,
+      focusNode: focusNode,
+      autofocus: autofocus,
       obscureText: isPassword && obscure,
       keyboardType: keyboardType,
+      textInputAction: textInputAction,
+      onFieldSubmitted: onSubmitted,
       textAlign: TextAlign.right,
       style: const TextStyle(color: Color(0xFF1E293B)),
       validator: validator ??

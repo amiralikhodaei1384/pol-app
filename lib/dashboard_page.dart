@@ -12,6 +12,16 @@ import 'package:pol_app/notification_poller.dart';
 import 'package:pol_app/login_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+const _persianDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+
+/// Rewrites latin digits in [input] with their Persian equivalents.
+String _toPersianDigits(Object input) {
+  return input.toString().replaceAllMapped(
+    RegExp(r'[0-9]'),
+    (m) => _persianDigits[int.parse(m[0]!)],
+  );
+}
+
 /// Shows the student or company dashboard based on the user role.
 class DashboardPage extends StatefulWidget {
   final bool isCompany;
@@ -49,6 +59,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
   String _studentName = 'دانشجوی پل';
   String _university = '';
   String _email = '';
+  int _profileCompletion = 0;
 
   @override
   void initState() {
@@ -101,6 +112,9 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
         if (userData['profile'] != null) {
           _studentName = userData['profile']['full_name'] ?? _studentName;
           _university = userData['profile']['university'] ?? _university;
+          _profileCompletion = (userData['profile']['completion_percentage'] as num?)?.round() ?? 0;
+        } else {
+          _profileCompletion = 0;
         }
       }
     }
@@ -113,6 +127,13 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
         _isLoadingApplications = false;
       });
     }
+  }
+
+  /// Ring color: green when complete, blue when well under way, amber otherwise.
+  Color get _completionColor {
+    if (_profileCompletion >= 100) return const Color(0xFF00C853);
+    if (_profileCompletion >= 60) return const Color(0xFF1E6AFB);
+    return const Color(0xFFF59E0B);
   }
 
   void _openProfileBuilder() {
@@ -698,24 +719,35 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
             children: [
               const Row(children: [Text('تکمیل پروفایل', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))]),
               const SizedBox(height: 16),
-              const Stack(
+              Stack(
                 alignment: Alignment.center,
                 children: [
                   SizedBox(
                     width: 70,
                     height: 70,
-                    child: CircularProgressIndicator(
-                      value: 1.0,
-                      strokeWidth: 6,
-                      backgroundColor: Colors.grey,
-                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00C853)),
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween<double>(begin: 0, end: _profileCompletion / 100),
+                      duration: const Duration(milliseconds: 600),
+                      curve: Curves.easeOut,
+                      builder: (context, value, child) => CircularProgressIndicator(
+                        value: value,
+                        strokeWidth: 6,
+                        backgroundColor: const Color(0xFFE5E7EB),
+                        valueColor: AlwaysStoppedAnimation<Color>(_completionColor),
+                      ),
                     ),
                   ),
-                  Text('۱۰۰٪', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87))
+                  Text('${_toPersianDigits(_profileCompletion)}٪', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87))
                 ],
               ),
               const SizedBox(height: 14),
-              const Text('پروفایل شما کامل است و بیشترین شانس تطبیق را دارید.', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Colors.grey, height: 1.4)),
+              Text(
+                _profileCompletion >= 100
+                    ? 'پروفایل شما کامل است و بیشترین شانس تطبیق را دارید.'
+                    : 'با تکمیل بخش‌های باقی‌مانده، شانس تطبیق خود را افزایش دهید.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 11, color: Colors.grey, height: 1.4),
+              ),
               const SizedBox(height: 14),
               OutlinedButton(
                 onPressed: _openProfileBuilder,

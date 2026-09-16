@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import auth, projects
 
-app = FastAPI(title="Karmatch API")
+app = FastAPI(title="Pol API")
 
 app.add_middleware(
     CORSMiddleware,

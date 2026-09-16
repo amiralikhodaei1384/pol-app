@@ -21,6 +21,8 @@ class _LoginPageState extends State<LoginPage> {
 
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _emailFocus = FocusNode();
+  final _passwordFocus = FocusNode();
   bool _obscurePassword = true;
   bool _isLoading = false;
 
@@ -28,6 +30,8 @@ class _LoginPageState extends State<LoginPage> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _emailFocus.dispose();
+    _passwordFocus.dispose();
     super.dispose();
   }
 
@@ -178,9 +182,12 @@ class _LoginPageState extends State<LoginPage> {
           const SizedBox(height: 24),
           _buildTextField(
             controller: _emailController,
+            focusNode: _emailFocus,
+            autofocus: true,
             hint: 'ایمیل دانشجویی یا سازمانی',
             icon: Icons.person_outline_rounded,
             keyboardType: TextInputType.emailAddress,
+            onSubmitted: (_) => _nextStep(),
           ),
           const SizedBox(height: 24),
           _buildButton(text: 'مرحله بعد', onPressed: _nextStep),
@@ -212,11 +219,17 @@ class _LoginPageState extends State<LoginPage> {
           const SizedBox(height: 32),
           _buildTextField(
             controller: _passwordController,
+            focusNode: _passwordFocus,
+            autofocus: true,
             hint: 'رمز عبور',
             icon: Icons.lock_outline_rounded,
             isPassword: true,
             obscure: _obscurePassword,
             toggleVisibility: () => setState(() => _obscurePassword = !_obscurePassword),
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) {
+              if (!_isLoading) _handleLogin();
+            },
           ),
           const SizedBox(height: 24),
           _buildButton(text: 'ورود به پل', onPressed: _isLoading ? null : _handleLogin, isLoading: _isLoading),
@@ -257,11 +270,19 @@ class _LoginPageState extends State<LoginPage> {
     VoidCallback? toggleVisibility,
     TextInputType? keyboardType,
     TextEditingController? controller,
+    FocusNode? focusNode,
+    bool autofocus = false,
+    TextInputAction textInputAction = TextInputAction.next,
+    void Function(String)? onSubmitted,
   }) {
     return TextFormField(
       controller: controller,
+      focusNode: focusNode,
+      autofocus: autofocus,
       obscureText: isPassword && obscure,
       keyboardType: keyboardType,
+      textInputAction: textInputAction,
+      onFieldSubmitted: onSubmitted,
       textAlign: TextAlign.right,
       style: const TextStyle(color: Color(0xFF1E293B), fontSize: 14),
       validator: (value) {
