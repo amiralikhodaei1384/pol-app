@@ -48,12 +48,10 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
   final _persianRegex = RegExp(r'^[\u0600-\u06FF\s]+$');
   final _phoneRegex = RegExp(r'^09\d{9}$');
 
-  List<String> _allUniversities = ['دانشگاه تهران', 'دانشگاه صنعتی شریف', 'دانشگاه صنعتی امیرکبیر', 'دانشگاه علم و صنعت', 'سایر'];
-  List<String> _allMajors = ['مهندسی کامپیوتر', 'مهندسی برق', 'مهندسی صنایع', 'سایر'];
-  List<String> _allSkillsOptions = [
-    "Flutter", "Dart", "Python", "React", "JavaScript", "SQL", "Figma",
-    "UI/UX", "Django", "FastAPI", "Node.js", "C++", "Java", "Git", "Docker"
-  ];
+  // Filled from /projects/options.
+  List<String> _allUniversities = [];
+  List<String> _allMajors = [];
+  List<String> _allSkillsOptions = [];
 
   @override
   void initState() {

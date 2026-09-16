@@ -8,6 +8,7 @@ from app.db.session import engine, SessionLocal
 from app.db.base import Base
 from app.models import models
 from app.core import security
+from seed_options import seed_options
 
 def reset_and_seed_db():
     Base.metadata.drop_all(bind=engine)
@@ -17,35 +18,7 @@ def reset_and_seed_db():
     try:
         common_password = security.get_password_hash("amir")
 
-        universities = [
-            "دانشگاه تهران", "دانشگاه صنعتی شریف", "دانشگاه صنعتی امیرکبیر",
-            "دانشگاه علم و صنعت", "دانشگاه شهید بهشتی", "دانشگاه خواجه نصیر",
-            "دانشگاه علامه طباطبایی", "دانشگاه اصفهان", "دانشگاه شیراز", "سایر"
-        ]
-        for u in universities:
-            db.add(models.University(name=u))
-
-        majors = [
-            "مهندسی کامپیوتر", "مهندسی برق", "مهندسی صنایع", "مهندسی مکانیک",
-            "علوم کامپیوتر", "مدیریت / MBA", "مهندسی عمران", "سایر"
-        ]
-        for m in majors:
-            db.add(models.Major(name=m))
-
-        cities = ["تهران", "اصفهان", "شیراز", "مشهد", "تبریز", "کرج", "اهواز", "قم", "رشت", "دورکاری"]
-        for c in cities:
-            db.add(models.City(name=c))
-
-        categories = ["توسعه نرم‌افزار", "طراحی UI/UX", "دیجیتال مارکتینگ", "هوش مصنوعی و داده", "شبکه و امنیت", "مدیریت و صنایع"]
-        for cat in categories:
-            db.add(models.Category(name=cat))
-
-        skills = [
-            "Flutter", "Dart", "Python", "React", "JavaScript", "SQL", "Figma",
-            "UI/UX", "Django", "FastAPI", "Node.js", "C++", "Java", "Git", "Docker"
-        ]
-        for s in skills:
-            db.add(models.Skill(name=s))
+        seed_options(db)
 
         student_user = models.User(
             email="amir@gmail.com",

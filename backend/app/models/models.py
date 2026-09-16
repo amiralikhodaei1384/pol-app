@@ -199,3 +199,9 @@ class Skill(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String, unique=True, nullable=False)
+
+class ProjectTypeOption(Base):
+    __tablename__ = "options_project_types"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String, unique=True, nullable=False)

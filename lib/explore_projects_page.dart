@@ -23,7 +23,7 @@ class _ExploreProjectsPageState extends State<ExploreProjectsPage> {
   List<String> _selectedMajors = [];
   List<String> _selectedUniversities = [];
 
-  List<String> _typeOptions = ['همه', 'کارآموزی', 'پروژه', 'امریه'];
+  List<String> _typeOptions = ['همه'];
   List<String> _cityOptions = [];
   List<String> _categoryOptions = [];
   List<String> _majorOptions = [];
@@ -44,6 +44,7 @@ class _ExploreProjectsPageState extends State<ExploreProjectsPage> {
     final options = await ApiService.fetchOptions();
     if (options != null && mounted) {
       setState(() {
+        if (options['project_types'] != null) _typeOptions = ['همه', ...(options['project_types'] as List).cast<String>()];
         if (options['cities'] != null) _cityOptions = (options['cities'] as List).cast<String>();
         if (options['categories'] != null) _categoryOptions = (options['categories'] as List).cast<String>();
         if (options['majors'] != null) _majorOptions = (options['majors'] as List).cast<String>();

@@ -46,8 +46,8 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
   bool _isLoadingProjects = true;
   bool _isLoadingApplications = true;
 
-  String _studentName = 'دانشجوی کارمَچ';
-  String _university = 'دانشگاه تهران';
+  String _studentName = 'دانشجوی پل';
+  String _university = '';
   String _email = '';
 
   @override
@@ -746,7 +746,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
               const SizedBox(height: 16),
               Row(children: [const Icon(Icons.person_outline, size: 18, color: Colors.grey), const SizedBox(width: 8), Text(_studentName, style: const TextStyle(fontSize: 11, color: Colors.black87))]),
               const SizedBox(height: 8),
-              Row(children: [const Icon(Icons.school_outlined, size: 18, color: Colors.grey), const SizedBox(width: 8), Text(_university, style: const TextStyle(fontSize: 11, color: Colors.black87))]),
+              Row(children: [const Icon(Icons.school_outlined, size: 18, color: Colors.grey), const SizedBox(width: 8), Text(_university.isNotEmpty ? _university : 'دانشگاه تعیین نشده', style: const TextStyle(fontSize: 11, color: Colors.black87))]),
               const SizedBox(height: 8),
               Row(children: [const Icon(Icons.mail_outline, size: 18, color: Colors.grey), const SizedBox(width: 8), Expanded(child: Text(_email, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: Colors.black87)))]),
             ],

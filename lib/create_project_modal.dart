@@ -30,11 +30,13 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
   List<String> _selectedMajors = [];
   final List<String> _skillsList = [];
 
-  List<String> _cities = ['تهران', 'اصفهان', 'شیراز', 'مشهد', 'تبریز', 'کرج', 'اهواز', 'قم', 'رشت', 'دورکاری'];
-  List<String> _categories = ['توسعه نرم‌افزار', 'طراحی UI/UX', 'دیجیتال مارکتینگ', 'هوش مصنوعی و داده', 'شبکه و امنیت', 'مدیریت و صنایع'];
-  List<String> _allUniversities = ['دانشگاه تهران', 'دانشگاه صنعتی شریف', 'دانشگاه صنعتی امیرکبیر', 'دانشگاه علم و صنعت', 'دانشگاه شهید بهشتی', 'سایر'];
-  List<String> _allMajors = ['مهندسی کامپیوتر', 'مهندسی برق', 'مهندسی صنایع', 'مهندسی مکانیک', 'علوم کامپیوتر', 'سایر'];
-  List<String> _allSkillsOptions = ["Flutter", "Dart", "Python", "React", "JavaScript", "SQL", "Figma", "UI/UX", "Django", "FastAPI", "Node.js", "C++", "Java", "Git", "Docker"];
+  // Filled from /projects/options.
+  List<String> _projectTypes = [];
+  List<String> _cities = [];
+  List<String> _categories = [];
+  List<String> _allUniversities = [];
+  List<String> _allMajors = [];
+  List<String> _allSkillsOptions = [];
 
   String? _selectedDeadline;
   bool _requiresInterview = true;
@@ -54,6 +56,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
     final opts = await ApiService.fetchOptions();
     if (opts != null && mounted) {
       setState(() {
+        if (opts['project_types'] != null) _projectTypes = (opts['project_types'] as List).cast<String>();
         if (opts['cities'] != null) _cities = (opts['cities'] as List).cast<String>();
         if (opts['categories'] != null) _categories = (opts['categories'] as List).cast<String>();
         if (opts['universities'] != null) _allUniversities = (opts['universities'] as List).cast<String>();
@@ -478,7 +481,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                                   DropdownButtonFormField<String>(
                                     value: _selectedProjectType,
                                     decoration: _inputDecoration('انتخاب نوع'),
-                                    items: ['پروژه', 'کارآموزی', 'امریه'].map((type) {
+                                    items: _projectTypes.map((type) {
                                       return DropdownMenuItem(value: type, child: Text(type, style: const TextStyle(fontSize: 12)));
                                     }).toList(),
                                     onChanged: (val) => setState(() => _selectedProjectType = val),

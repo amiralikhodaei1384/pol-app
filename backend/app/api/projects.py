@@ -15,22 +15,6 @@ router = APIRouter()
 UPLOAD_DIR = "uploads/resumes"
 CHAT_UPLOAD_DIR = "uploads/chat"
 
-UNIVERSITIES = [
-    "دانشگاه تهران", "دانشگاه صنعتی شریف", "دانشگاه صنعتی امیرکبیر",
-    "دانشگاه علم و صنعت", "دانشگاه شهید بهشتی", "دانشگاه خواجه نصیر",
-    "دانشگاه علامه طباطبایی", "دانشگاه اصفهان", "دانشگاه شیراز", "سایر"
-]
-MAJORS = [
-    "مهندسی کامپیوتر", "مهندسی برق", "مهندسی صنایع", "مهندسی مکانیک",
-    "علوم کامپیوتر", "مدیریت / MBA", "مهندسی عمران", "سایر"
-]
-SKILLS = [
-    "Flutter", "Dart", "Python", "React", "JavaScript", "SQL", "Figma",
-    "UI/UX", "Django", "FastAPI", "Node.js", "C++", "Java", "Git", "Docker"
-]
-CITIES = ["تهران", "اصفهان", "شیراز", "مشهد", "تبریز", "کرج", "اهواز", "قم", "رشت", "دورکاری"]
-CATEGORIES = ["توسعه نرم‌افزار", "طراحی UI/UX", "دیجیتال مارکتینگ", "هوش مصنوعی و داده", "شبکه و امنیت", "مدیریت و صنایع"]
-
 # Only adds to the session: the caller's commit saves the notification together with the change it describes.
 def send_notification(db: Session, user_id, title: str, message: str, notif_type: str, link_id: str = None):
     target_uuid = uuid.UUID(str(user_id)) if not isinstance(user_id, uuid.UUID) else user_id
@@ -45,18 +29,13 @@ def send_notification(db: Session, user_id, title: str, message: str, notif_type
 
 @router.get("/options")
 def get_options(db: Session = Depends(get_db)):
-    universities = [u.name for u in db.query(models.University).all()] or UNIVERSITIES
-    majors = [m.name for m in db.query(models.Major).all()] or MAJORS
-    cities = [c.name for c in db.query(models.City).all()] or CITIES
-    categories = [c.name for c in db.query(models.Category).all()] or CATEGORIES
-    skills = [s.name for s in db.query(models.Skill).all()] or SKILLS
-
     return {
-        "universities": universities,
-        "majors": majors,
-        "cities": cities,
-        "categories": categories,
-        "skills": skills
+        "universities": [u.name for u in db.query(models.University).all()],
+        "majors": [m.name for m in db.query(models.Major).all()],
+        "cities": [c.name for c in db.query(models.City).all()],
+        "categories": [c.name for c in db.query(models.Category).all()],
+        "skills": [s.name for s in db.query(models.Skill).all()],
+        "project_types": [t.name for t in db.query(models.ProjectTypeOption).all()],
     }
 
 @router.get("/notifications/counts")
@@ -380,6 +359,8 @@ def create_project(project_in: schemas.ProjectCreate, db: Session = Depends(get_
         raise HTTPException(status_code=403, detail="تنها کارفرما مجاز است.")
     if not current_user.company_rep_profile or not current_user.company_rep_profile.company_id:
         raise HTTPException(status_code=400, detail="اطلاعات شرکت یافت نشد.")
+    if not db.query(models.ProjectTypeOption).filter(models.ProjectTypeOption.name == project_in.project_type).first():
+        raise HTTPException(status_code=400, detail="نوع همکاری انتخاب‌شده معتبر نیست.")
 
     company_id = current_user.company_rep_profile.company_id
     new_project = models.Project(
@@ -388,7 +369,7 @@ def create_project(project_in: schemas.ProjectCreate, db: Session = Depends(get_
         description=project_in.description,
         required_skills=project_in.required_skills,
         deadline=project_in.deadline,
-        project_type=project_in.project_type.value if hasattr(project_in.project_type, 'value') else project_in.project_type,
+        project_type=project_in.project_type,
         city=project_in.city,
         category=project_in.category,
         target_universities=project_in.target_universities,

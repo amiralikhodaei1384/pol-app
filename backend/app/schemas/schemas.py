@@ -2,7 +2,6 @@ from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
-from enum import Enum
 from ..models.models import UserRole
 
 class UserBase(BaseModel):
@@ -50,11 +49,6 @@ class CompanyProfileUpdate(BaseModel):
     website: Optional[str] = None
     address: Optional[str] = None
 
-class ProjectType(str, Enum):
-    INTERNSHIP = "کارآموزی"
-    MILITARY = "امریه"
-    PROJECT = "پروژه"
-
 class MatchingWeights(BaseModel):
     university_weight: float = Field(default=0.35, ge=0.0, le=1.0)
     major_weight: float = Field(default=0.35, ge=0.0, le=1.0)
@@ -65,10 +59,10 @@ class ProjectCreate(BaseModel):
     description: str
     required_skills: List[str]
     deadline: str
-    project_type: ProjectType = Field(default=ProjectType.PROJECT)
-    city: Optional[str] = "تهران"
-    category: Optional[str] = "عمومی"
-    related_major: Optional[str] = "سایر"
+    # Checked against options_project_types when a project is created.
+    project_type: str
+    city: Optional[str] = None
+    category: Optional[str] = None
     target_universities: Optional[List[str]] = []
     target_majors: Optional[List[str]] = []
     requires_interview: bool = Field(default=True)
