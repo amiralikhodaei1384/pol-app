@@ -8,7 +8,7 @@ import os
 from ..db.session import get_db
 from ..models import models
 from ..schemas import schemas
-from .auth import get_current_user
+from .auth import get_current_user, calculate_profile_completion
 
 router = APIRouter()
 
@@ -32,6 +32,7 @@ def get_options(db: Session = Depends(get_db)):
     return {
         "universities": [u.name for u in db.query(models.University).all()],
         "majors": [m.name for m in db.query(models.Major).all()],
+        "degrees": [d.name for d in db.query(models.Degree).all()],
         "cities": [c.name for c in db.query(models.City).all()],
         "categories": [c.name for c in db.query(models.Category).all()],
         "skills": [s.name for s in db.query(models.Skill).all()],
@@ -76,72 +77,89 @@ def get_notifications(db: Session = Depends(get_db), current_user: models.User =
     db.commit()
     return res
 
+# Fallback weights when a project was created before the employer could tune them.
+DEFAULT_MATCH_WEIGHTS = {
+    "university_weight": 0.25,
+    "major_weight": 0.25,
+    "skills_weight": 0.25,
+    "degree_weight": 0.10,
+    "profile_weight": 0.15,
+}
+
+
+def _ranked_score(candidates: List[str], targets: List[str]) -> Optional[float]:
+    """Score the best rank any of the student's entries reaches in the employer's list.
+
+    Returns None when the employer left the list empty. That means "I did not ask
+    about this", not "everyone is an 80" - an unscored axis drops out of the average
+    entirely, so leaving fields blank cannot inflate what students see.
+
+    Every degree the student has on file is a candidate, so adding a second degree
+    can only ever help them - it can never displace a better-matching first one.
+    """
+    if not targets:
+        return None
+    ranks = [targets.index(c) for c in candidates if c and c in targets]
+    if not ranks:
+        return 40.0
+    return {0: 100.0, 1: 85.0, 2: 70.0}.get(min(ranks), 60.0)
+
+
 def calculate_match_score(student_profile: models.StudentProfile, project: models.Project) -> int:
     if not student_profile:
         return 50
 
-    target_univs = project.target_universities or []
-    student_univ = student_profile.university
+    # The profile builder derives the university/major columns from the first
+    # education entry, so the columns alone under-report a student with several
+    # degrees. Consider the columns and every entry together.
+    educations = [e for e in (student_profile.educations or []) if isinstance(e, dict)]
+    univ_score = _ranked_score(
+        [student_profile.university] + [e.get("university") for e in educations],
+        project.target_universities or [],
+    )
+    major_score = _ranked_score(
+        [student_profile.major] + [e.get("major") for e in educations],
+        project.target_majors or [],
+    )
+    # No universal ladder here: a کارآموزی posting may rank کارشناسی top and
+    # دکتری last. An employer who leaves the list empty scores no degree at all.
+    degree_score = _ranked_score(
+        [e.get("degree") for e in educations],
+        project.target_degrees or [],
+    )
 
-    if student_univ and student_univ in target_univs:
-        rank = target_univs.index(student_univ)
-        if rank == 0:
-            univ_score = 100
-        elif rank == 1:
-            univ_score = 85
-        elif rank == 2:
-            univ_score = 70
-        else:
-            univ_score = 60
-    elif not target_univs:
-        univ_score = 80
-    else:
-        univ_score = 40
-
-    target_majors = project.target_majors or []
-    student_major = student_profile.major
-
-    if student_major and student_major in target_majors:
-        rank = target_majors.index(student_major)
-        if rank == 0:
-            major_score = 100
-        elif rank == 1:
-            major_score = 85
-        elif rank == 2:
-            major_score = 70
-        else:
-            major_score = 60
-    elif not target_majors:
-        major_score = 80
-    else:
-        major_score = 40
-
-    student_skills = set(student_profile.skills or [])
     required_skills = set(project.required_skills or [])
     if required_skills:
-        matched_skills = student_skills.intersection(required_skills)
-        skills_score = (len(matched_skills) / len(required_skills)) * 100
+        matched = set(student_profile.skills or []).intersection(required_skills)
+        skills_score = len(matched) / len(required_skills) * 100
     else:
-        skills_score = 80
+        skills_score = None
 
-    weights = project.weights or {
-        "university_weight": 0.35,
-        "major_weight": 0.35,
-        "skills_weight": 0.30
-    }
+    # Deliberately project-independent: this is the same "تکمیل پروفایل" percentage the
+    # student sees on their dashboard. Filling the profile in helps them everywhere,
+    # whether or not what they filled in happens to suit this particular project.
+    # It is the one axis the employer cannot switch off.
+    profile_score = float(calculate_profile_completion(student_profile))
 
-    w_univ = weights.get("university_weight", 0.35)
-    w_major = weights.get("major_weight", 0.35)
-    w_skills = weights.get("skills_weight", 0.30)
-    total_w = w_univ + w_major + w_skills if (w_univ + w_major + w_skills) > 0 else 1.0
+    weights = project.weights or DEFAULT_MATCH_WEIGHTS
+    axes = [
+        (univ_score, "university_weight"),
+        (major_score, "major_weight"),
+        (degree_score, "degree_weight"),
+        (skills_score, "skills_weight"),
+        (profile_score, "profile_weight"),
+    ]
+    scored = [
+        (score, weights.get(key, DEFAULT_MATCH_WEIGHTS[key]))
+        for score, key in axes
+        if score is not None and weights.get(key, DEFAULT_MATCH_WEIGHTS[key]) > 0
+    ]
 
-    base_score = (univ_score * w_univ + major_score * w_major + skills_score * w_skills) / total_w
+    total_w = sum(w for _, w in scored)
+    if total_w <= 0:
+        return 50
 
-    work_experiences = student_profile.work_experiences or []
-    work_bonus = 10 if len(work_experiences) > 0 else 0
-
-    final_score = base_score + work_bonus
-
+    final_score = sum(score * w for score, w in scored) / total_w
     return max(35, min(98, round(final_score)))
 
 @router.get("/recommended")
@@ -374,6 +392,7 @@ def create_project(project_in: schemas.ProjectCreate, db: Session = Depends(get_
         category=project_in.category,
         target_universities=project_in.target_universities,
         target_majors=project_in.target_majors,
+        target_degrees=project_in.target_degrees,
         requires_interview=project_in.requires_interview,
         weights=project_in.weights.model_dump() if project_in.weights else None
     )

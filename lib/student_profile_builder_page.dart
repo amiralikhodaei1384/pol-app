@@ -52,6 +52,7 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
   List<String> _allUniversities = [];
   List<String> _allMajors = [];
   List<String> _allSkillsOptions = [];
+  List<String> _allDegrees = ['کاردانی', 'کارشناسی', 'کارشناسی ارشد', 'دکتری'];
 
   @override
   void initState() {
@@ -69,6 +70,8 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
         if (options['universities'] != null) _allUniversities = (options['universities'] as List).cast<String>();
         if (options['majors'] != null) _allMajors = (options['majors'] as List).cast<String>();
         if (options['skills'] != null) _allSkillsOptions = (options['skills'] as List).cast<String>();
+        final degreeOpts = options['degrees'];
+        if (degreeOpts is List && degreeOpts.isNotEmpty) _allDegrees = degreeOpts.cast<String>();
       });
     }
 
@@ -224,7 +227,7 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
   }
 
   void _showAddEducationDialog() {
-    String degree = 'کارشناسی';
+    String degree = _allDegrees.contains('کارشناسی') ? 'کارشناسی' : _allDegrees.first;
     String? selectedUniversity;
     String? selectedMajor;
     final startYearCtrl = TextEditingController();
@@ -257,7 +260,7 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
                       DropdownButtonFormField<String>(
                         value: degree,
                         decoration: _inputDec('انتخاب مقطع'),
-                        items: ['کاردانی', 'کارشناسی', 'کارشناسی ارشد', 'دکتری'].map((d) {
+                        items: _allDegrees.map((d) {
                           return DropdownMenuItem(value: d, child: Text(d, style: const TextStyle(fontSize: 12)));
                         }).toList(),
                         onChanged: (val) => degree = val ?? degree,

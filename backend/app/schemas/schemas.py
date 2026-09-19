@@ -50,9 +50,13 @@ class CompanyProfileUpdate(BaseModel):
     address: Optional[str] = None
 
 class MatchingWeights(BaseModel):
-    university_weight: float = Field(default=0.35, ge=0.0, le=1.0)
-    major_weight: float = Field(default=0.35, ge=0.0, le=1.0)
-    skills_weight: float = Field(default=0.30, ge=0.0, le=1.0)
+    university_weight: float = Field(default=0.25, ge=0.0, le=1.0)
+    major_weight: float = Field(default=0.25, ge=0.0, le=1.0)
+    skills_weight: float = Field(default=0.25, ge=0.0, le=1.0)
+    degree_weight: float = Field(default=0.10, ge=0.0, le=1.0)
+    # How much the student's overall profile-completion percentage counts.
+    # Project-independent: a fuller profile helps on every project.
+    profile_weight: float = Field(default=0.15, ge=0.0, le=1.0)
 
 class ProjectCreate(BaseModel):
     title: str = Field(..., min_length=3, max_length=150)
@@ -65,6 +69,7 @@ class ProjectCreate(BaseModel):
     category: Optional[str] = None
     target_universities: Optional[List[str]] = []
     target_majors: Optional[List[str]] = []
+    target_degrees: Optional[List[str]] = []
     requires_interview: bool = Field(default=True)
     weights: Optional[MatchingWeights] = Field(default_factory=MatchingWeights)
 

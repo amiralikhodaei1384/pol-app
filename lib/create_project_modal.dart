@@ -21,6 +21,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
   final TextEditingController _skillInputController = TextEditingController();
   final TextEditingController _univInputController = TextEditingController();
   final TextEditingController _majorInputController = TextEditingController();
+  final TextEditingController _degreeInputController = TextEditingController();
 
   String? _selectedProjectType;
   String? _selectedCity;
@@ -28,6 +29,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
 
   List<String> _selectedUniversities = [];
   List<String> _selectedMajors = [];
+  List<String> _selectedDegrees = [];
   final List<String> _skillsList = [];
 
   // Filled from /projects/options.
@@ -36,15 +38,18 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
   List<String> _categories = [];
   List<String> _allUniversities = [];
   List<String> _allMajors = [];
+  List<String> _allDegrees = [];
   List<String> _allSkillsOptions = [];
 
   String? _selectedDeadline;
   bool _requiresInterview = true;
   bool _isLoading = false;
 
-  double _univWeight = 0.35;
-  double _majorWeight = 0.35;
-  double _skillsWeight = 0.30;
+  double _univWeight = 0.25;
+  double _majorWeight = 0.25;
+  double _skillsWeight = 0.25;
+  double _degreeWeight = 0.10;
+  double _profileWeight = 0.15;
 
   @override
   void initState() {
@@ -61,6 +66,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
         if (opts['categories'] != null) _categories = (opts['categories'] as List).cast<String>();
         if (opts['universities'] != null) _allUniversities = (opts['universities'] as List).cast<String>();
         if (opts['majors'] != null) _allMajors = (opts['majors'] as List).cast<String>();
+        if (opts['degrees'] != null) _allDegrees = (opts['degrees'] as List).cast<String>();
         if (opts['skills'] != null) _allSkillsOptions = (opts['skills'] as List).cast<String>();
       });
     }
@@ -73,6 +79,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
     _skillInputController.dispose();
     _univInputController.dispose();
     _majorInputController.dispose();
+    _degreeInputController.dispose();
     super.dispose();
   }
 
@@ -121,6 +128,22 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
   void _removeMajor(String major) {
     setState(() {
       _selectedMajors.remove(major);
+    });
+  }
+
+  void _addDegree([String? customDegree]) {
+    final text = customDegree ?? _degreeInputController.text.trim();
+    if (text.isNotEmpty && !_selectedDegrees.contains(text)) {
+      setState(() {
+        _selectedDegrees.add(text);
+        _degreeInputController.clear();
+      });
+    }
+  }
+
+  void _removeDegree(String degree) {
+    setState(() {
+      _selectedDegrees.remove(degree);
     });
   }
 
@@ -198,11 +221,14 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
           'category': _selectedCategory,
           'target_universities': _selectedUniversities,
           'target_majors': _selectedMajors,
+          'target_degrees': _selectedDegrees,
           'requires_interview': _requiresInterview,
           'weights': {
             'university_weight': _univWeight,
             'major_weight': _majorWeight,
             'skills_weight': _skillsWeight,
+            'degree_weight': _degreeWeight,
+            'profile_weight': _profileWeight,
           }
         }),
       ).timeout(const Duration(seconds: 10));
@@ -548,6 +574,18 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                         const SizedBox(height: 16),
 
                         _buildAutocompleteSearchInput(
+                          label: 'مقاطع تحصیلی مورد نظر (اختیاری)',
+                          hint: 'به ترتیب اولویت (مثال: کارشناسی برای کارآموزی)...',
+                          controller: _degreeInputController,
+                          allOptions: _allDegrees,
+                          selectedList: _selectedDegrees,
+                          onAdd: _addDegree,
+                          onRemove: _removeDegree,
+                          chipColor: const Color(0xFFF59E0B),
+                        ),
+                        const SizedBox(height: 16),
+
+                        _buildAutocompleteSearchInput(
                           label: 'مهارت‌های مورد نیاز *',
                           hint: 'جستجوی مهارت (مثال: Flutter, Python)...',
                           controller: _skillInputController,
@@ -618,12 +656,14 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
 
                         ExpansionTile(
                           title: const Text('وزن‌دهی تطبیق هوشمند (اختیاری)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1E6AFB))),
-                          subtitle: const Text('تنظیم میزان اهمیت دانشگاه، رشته و مهارت‌ها در رتبه‌بندی دانشجو', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                          subtitle: const Text('تنظیم میزان اهمیت دانشگاه، رشته، مهارت‌ها، مقطع و تکمیل پروفایل در رتبه‌بندی', style: TextStyle(fontSize: 10, color: Colors.grey)),
                           childrenPadding: const EdgeInsets.all(8),
                           children: [
                             _buildWeightSlider('میزان اهمیت دانشگاه', _univWeight, (val) => setState(() => _univWeight = val)),
                             _buildWeightSlider('میزان اهمیت رشته تحصیلی', _majorWeight, (val) => setState(() => _majorWeight = val)),
                             _buildWeightSlider('میزان اهمیت مهارت‌ها', _skillsWeight, (val) => setState(() => _skillsWeight = val)),
+                            _buildWeightSlider('میزان اهمیت مقطع تحصیلی', _degreeWeight, (val) => setState(() => _degreeWeight = val)),
+                            _buildWeightSlider('میزان اهمیت تکمیل پروفایل', _profileWeight, (val) => setState(() => _profileWeight = val)),
                           ],
                         ),
                       ],

@@ -8,6 +8,7 @@ from app.db.session import engine, SessionLocal
 from app.db.base import Base
 from app.models import models
 from app.core import security
+from app.api.auth import calculate_profile_completion
 from seed_options import seed_options
 
 def reset_and_seed_db():
@@ -32,6 +33,10 @@ def reset_and_seed_db():
         student_profile = models.StudentProfile(
             user_id=student_user.id,
             full_name="علی محمدی",
+            phone="09121234567",
+            birth_date="1381/05/12",
+            residence="تهران",
+            birth_place="اصفهان",
             university="دانشگاه تهران",
             major="مهندسی کامپیوتر",
             entrance_year=1401,
@@ -40,8 +45,30 @@ def reset_and_seed_db():
                 {"course_name": "برنامه‌نویسی پیشرفته", "grade": 19.5},
                 {"course_name": "پایگاه داده", "grade": 18.0}
             ],
-            completion_percentage=100
+            educations=[
+                {
+                    "degree": "کارشناسی",
+                    "university": "دانشگاه تهران",
+                    "major": "مهندسی کامپیوتر",
+                    "start_year": "1401",
+                    "end_year": "در حال تحصیل",
+                    "gpa": "17.8"
+                }
+            ],
+            work_experiences=[
+                {
+                    "company": "استارتاپ آرمان",
+                    "position": "کارآموز توسعه موبایل",
+                    "from_year": "1403",
+                    "to_year": "1404",
+                    "description": "توسعه اپلیکیشن فروشگاهی با Flutter"
+                }
+            ],
+            portfolio_links={"github": "https://github.com/alimohammadi", "figma": ""},
         )
+        # resume_file is left empty on purpose: the demo account lands just short of
+        # 100% so the dashboard still has something to nudge the student about.
+        student_profile.completion_percentage = calculate_profile_completion(student_profile)
         db.add(student_profile)
 
         company_user = models.User(
@@ -80,11 +107,15 @@ def reset_and_seed_db():
             category="توسعه نرم‌افزار",
             target_universities=["دانشگاه تهران", "دانشگاه صنعتی شریف"],
             target_majors=["مهندسی کامپیوتر"],
+            # An internship, so undergraduates are ranked ahead of postgraduates.
+            target_degrees=["کارشناسی", "کارشناسی ارشد"],
             requires_interview=True,
             weights={
-                "university_weight": 0.35,
-                "major_weight": 0.35,
-                "skills_weight": 0.30
+                "university_weight": 0.25,
+                "major_weight": 0.25,
+                "skills_weight": 0.25,
+                "degree_weight": 0.10,
+                "profile_weight": 0.15
             }
         )
 

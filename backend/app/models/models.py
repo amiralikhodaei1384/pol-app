@@ -106,6 +106,8 @@ class Project(Base):
     category = Column(String(100), nullable=True)
     target_universities = Column(JSON, nullable=True)
     target_majors = Column(JSON, nullable=True)
+    # Ranked by the employer: an internship may well want کارشناسی ahead of دکتری.
+    target_degrees = Column(JSON, nullable=True)
     requires_interview = Column(Boolean, default=True)
     weights = Column(JSON, nullable=True)
     is_active = Column(Boolean, default=True)
@@ -178,6 +180,12 @@ class University(Base):
 
 class Major(Base):
     __tablename__ = "options_majors"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String, unique=True, nullable=False)
+
+class Degree(Base):
+    __tablename__ = "options_degrees"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String, unique=True, nullable=False)
