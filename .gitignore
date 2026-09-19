@@ -53,3 +53,12 @@ __pycache__/
 *.pyd
 .env
 .pytest_cache/
+
+# Uploaded user files (keep the folders, ignore their contents)
+backend/uploads/*
+!backend/uploads/chat/
+!backend/uploads/resumes/
+backend/uploads/chat/*
+backend/uploads/resumes/*
+!backend/uploads/chat/.gitkeep
+!backend/uploads/resumes/.gitkeep
