@@ -42,7 +42,6 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
   List<String> _allSkillsOptions = [];
 
   String? _selectedDeadline;
-  bool _requiresInterview = true;
   bool _isLoading = false;
 
   double _univWeight = 0.25;
@@ -222,7 +221,6 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
           'target_universities': _selectedUniversities,
           'target_majors': _selectedMajors,
           'target_degrees': _selectedDegrees,
-          'requires_interview': _requiresInterview,
           'weights': {
             'university_weight': _univWeight,
             'major_weight': _majorWeight,
@@ -643,16 +641,6 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                           },
                         ),
                         const SizedBox(height: 16),
-
-                        SwitchListTile(
-                          value: _requiresInterview,
-                          activeColor: const Color(0xFF1E6AFB),
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text('نیازمند مصاحبه / ملاقات حضوری', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                          subtitle: const Text('پس از تایید اولیه، زمان ملاقات حضوری تعیین خواهد شد.', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                          onChanged: (val) => setState(() => _requiresInterview = val),
-                        ),
-                        const SizedBox(height: 12),
 
                         ExpansionTile(
                           title: const Text('وزن‌دهی تطبیق هوشمند (اختیاری)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1E6AFB))),

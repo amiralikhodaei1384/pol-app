@@ -70,7 +70,6 @@ class ProjectCreate(BaseModel):
     target_universities: Optional[List[str]] = []
     target_majors: Optional[List[str]] = []
     target_degrees: Optional[List[str]] = []
-    requires_interview: bool = Field(default=True)
     weights: Optional[MatchingWeights] = Field(default_factory=MatchingWeights)
 
 class ProjectOut(ProjectCreate):

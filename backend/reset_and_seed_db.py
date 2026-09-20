@@ -109,7 +109,6 @@ def reset_and_seed_db():
             target_majors=["مهندسی کامپیوتر"],
             # An internship, so undergraduates are ranked ahead of postgraduates.
             target_degrees=["کارشناسی", "کارشناسی ارشد"],
-            requires_interview=True,
             weights={
                 "university_weight": 0.25,
                 "major_weight": 0.25,

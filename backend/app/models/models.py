@@ -108,7 +108,6 @@ class Project(Base):
     target_majors = Column(JSON, nullable=True)
     # Ranked by the employer: an internship may well want کارشناسی ahead of دکتری.
     target_degrees = Column(JSON, nullable=True)
-    requires_interview = Column(Boolean, default=True)
     weights = Column(JSON, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)

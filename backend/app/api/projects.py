@@ -27,6 +27,37 @@ def send_notification(db: Session, user_id, title: str, message: str, notif_type
         is_read=False
     ))
 
+# Gregorian -> Shamsi (Jalali), so dates read the same way everywhere in the app.
+def to_shamsi(dt) -> str:
+    if not dt:
+        return ""
+    gy, gm, gd = dt.year, dt.month, dt.day
+    g_days_in_month = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334]
+    gy2, gm2, gd2 = gy - 1600, gm - 1, gd - 1
+
+    day_no = 365 * gy2 + (gy2 + 3) // 4 - (gy2 + 99) // 100 + (gy2 + 399) // 400
+    day_no += g_days_in_month[gm2] + gd2
+    if gm > 2 and ((gy % 4 == 0 and gy % 100 != 0) or gy % 400 == 0):
+        day_no += 1
+
+    day_no -= 79
+    j_np, day_no = divmod(day_no, 12053)
+    jy = 979 + 33 * j_np + 4 * (day_no // 1461)
+    day_no %= 1461
+    if day_no >= 366:
+        jy += (day_no - 1) // 365
+        day_no = (day_no - 1) % 365
+
+    jm = 12
+    for i in range(12):
+        month_len = 31 if i < 6 else 30
+        if day_no < month_len:
+            jm = i + 1
+            break
+        day_no -= month_len
+
+    return f"{jy}/{jm:02d}/{day_no + 1:02d}"
+
 @router.get("/options")
 def get_options(db: Session = Depends(get_db)):
     return {
@@ -280,6 +311,8 @@ def get_company_applications(
             "student_courses": sp.courses if sp else [],
             "student_resume": sp.resume_file if sp else None,
             "student_message": a.message,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+            "created_at_fa": to_shamsi(a.created_at),
             "match_score": calculate_match_score(sp, a.project) if (sp and a.project) else 75,
             "status": a.status.value if hasattr(a.status, 'value') else str(a.status),
             "interview_date": a.interview_date,
@@ -349,7 +382,6 @@ def get_all_projects(
             "category": p.category,
             "target_universities": p.target_universities or [],
             "target_majors": p.target_majors or [],
-            "requires_interview": p.requires_interview,
             "company_name": p.company.name if p.company else "",
             "company_about": p.company.about if (p.company and getattr(p.company, 'about', None)) else "",
             "company_website": p.company.website if (p.company and getattr(p.company, 'website', None)) else "",
@@ -393,7 +425,6 @@ def create_project(project_in: schemas.ProjectCreate, db: Session = Depends(get_
         target_universities=project_in.target_universities,
         target_majors=project_in.target_majors,
         target_degrees=project_in.target_degrees,
-        requires_interview=project_in.requires_interview,
         weights=project_in.weights.model_dump() if project_in.weights else None
     )
     db.add(new_project)
