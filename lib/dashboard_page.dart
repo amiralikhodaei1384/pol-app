@@ -27,7 +27,10 @@ String _toPersianDigits(Object input) {
 class DashboardPage extends StatefulWidget {
   final bool isCompany;
 
-  const DashboardPage({super.key, this.isCompany = false});
+  /// Student only: scroll to (and highlight) the application for this project once loaded.
+  final String? focusProjectId;
+
+  const DashboardPage({super.key, this.isCompany = false, this.focusProjectId});
 
   @override
   State<DashboardPage> createState() => _DashboardPageState();
@@ -36,13 +39,15 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   @override
   Widget build(BuildContext context) {
-    return widget.isCompany ? const CompanyDashboardView() : const StudentDashboardView();
+    return widget.isCompany ? const CompanyDashboardView() : StudentDashboardView(focusProjectId: widget.focusProjectId);
   }
 }
 
 /// Student home with recommended projects and application status.
 class StudentDashboardView extends StatefulWidget {
-  const StudentDashboardView({super.key});
+  final String? focusProjectId;
+
+  const StudentDashboardView({super.key, this.focusProjectId});
 
   @override
   State<StudentDashboardView> createState() => _StudentDashboardViewState();
@@ -54,6 +59,10 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   List<dynamic> _projectsList = [];
   List<dynamic> _myApplicationsList = [];
+  // One key per application card (by project id) so a notification can scroll to it.
+  final Map<String, GlobalKey> _applicationKeys = {};
+  String? _highlightedProjectId;
+  bool _focusHandled = false;
   bool _isLoadingProjects = true;
   bool _isLoadingApplications = true;
 
@@ -127,7 +136,33 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
         _isLoadingProjects = false;
         _isLoadingApplications = false;
       });
+      _focusRequestedApplication();
     }
+  }
+
+  /// Scrolls to the application a notification pointed at and highlights it briefly.
+  /// Runs once, so later refreshes don't pull the page back down.
+  void _focusRequestedApplication() {
+    final target = widget.focusProjectId;
+    if (target == null || _focusHandled) return;
+    _focusHandled = true;
+    if (!_myApplicationsList.any((a) => a['project_id']?.toString() == target)) return;
+
+    setState(() => _highlightedProjectId = target);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final cardContext = _applicationKeys[target]?.currentContext;
+      if (cardContext != null) {
+        Scrollable.ensureVisible(
+          cardContext,
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.easeInOut,
+          alignment: 0.15,
+        );
+      }
+    });
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _highlightedProjectId = null);
+    });
   }
 
   /// Ring color: green when complete, blue when well under way, amber otherwise.
@@ -404,7 +439,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text('پروژه‌های پیشنهادی برای شما', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
+        const Expanded(child: Text('پروژه‌های پیشنهادی برای شما', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87))),
         IconButton(
           icon: const Icon(Icons.refresh, size: 18, color: Color(0xFF1E6AFB)),
           onPressed: _loadDashboardData,
@@ -561,7 +596,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('درخواست‌های ارسال‌شده من (وضعیت اپلای)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+            const Expanded(child: Text('درخواست‌های ارسال‌شده من (وضعیت اپلای)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)))),
             IconButton(
               icon: const Icon(Icons.refresh, size: 18, color: Color(0xFF1E6AFB)),
               onPressed: _loadDashboardData,
@@ -607,20 +642,31 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
               statusBg = const Color(0xFFFFEBEE);
             }
 
-            return Container(
+            final projectId = app['project_id']?.toString() ?? '';
+            final isHighlighted = projectId.isNotEmpty && projectId == _highlightedProjectId;
+
+            return AnimatedContainer(
+              key: projectId.isEmpty ? null : _applicationKeys.putIfAbsent(projectId, () => GlobalKey()),
+              duration: const Duration(milliseconds: 400),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isHighlighted ? const Color(0xFFFFFBEB) : Colors.white,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: isShortlisted
-                      ? const Color(0xFF1E6AFB)
-                      : isAccepted
-                          ? const Color(0xFF10B981)
-                          : const Color(0xFFE2E8F0),
+                  color: isHighlighted
+                      ? const Color(0xFFF59E0B)
+                      : isShortlisted
+                          ? const Color(0xFF1E6AFB)
+                          : isAccepted
+                              ? const Color(0xFF10B981)
+                              : const Color(0xFFE2E8F0),
+                  width: isHighlighted ? 2 : 1,
                 ),
                 boxShadow: [
-                  if (isShortlisted) BoxShadow(color: const Color(0xFF1E6AFB).withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 2))
+                  if (isHighlighted)
+                    BoxShadow(color: const Color(0xFFF59E0B).withValues(alpha: 0.25), blurRadius: 16, offset: const Offset(0, 4))
+                  else if (isShortlisted)
+                    BoxShadow(color: const Color(0xFF1E6AFB).withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 2))
                 ],
               ),
               child: Column(
@@ -662,7 +708,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                             children: [
                               const Icon(Icons.event_available, size: 18, color: Color(0xFF10B981)),
                               const SizedBox(width: 6),
-                              Text('زمان مصاحبه حضوری: ${app['interview_date']}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF047857))),
+                              Expanded(child: Text('زمان مصاحبه حضوری: ${app['interview_date']}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF047857)))),
                             ],
                           ),
                           const SizedBox(height: 6),
@@ -798,7 +844,7 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('وضعیت احراز هویت', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  const Expanded(child: Text('وضعیت احراز هویت', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(4)),

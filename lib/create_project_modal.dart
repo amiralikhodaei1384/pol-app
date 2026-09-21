@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:pol_app/widgets/search_picker_field.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pol_app/api_service.dart';
@@ -302,13 +303,6 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
     required Function(String) onRemove,
     required Color chipColor,
   }) {
-    final query = controller.text.trim().toLowerCase();
-    final suggestions = query.isEmpty
-        ? []
-        : allOptions
-        .where((opt) => opt.toLowerCase().contains(query) && !selectedList.contains(opt))
-        .toList();
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -317,28 +311,22 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
         Row(
           children: [
             Expanded(
-              child: TextField(
+              child: SearchPickerField(
                 controller: controller,
-                onChanged: (_) => setState(() {}),
+                options: allOptions,
+                exclude: selectedList,
+                style: const TextStyle(fontSize: 12),
+                onSelected: (option) {
+                  onAdd(option);
+                  controller.clear();
+                },
                 onSubmitted: (val) {
                   if (val.trim().isNotEmpty) {
                     onAdd(val.trim());
                     controller.clear();
-                    setState(() {});
                   }
                 },
-                style: const TextStyle(fontSize: 12),
-                decoration: _inputDecoration(hint).copyWith(
-                  suffixIcon: controller.text.isNotEmpty
-                      ? IconButton(
-                    icon: const Icon(Icons.clear, size: 16),
-                    onPressed: () {
-                      controller.clear();
-                      setState(() {});
-                    },
-                  )
-                      : null,
-                ),
+                decoration: _inputDecoration(hint),
               ),
             ),
             const SizedBox(width: 8),
@@ -360,38 +348,6 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
             ),
           ],
         ),
-
-        if (suggestions.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Container(
-            constraints: const BoxConstraints(maxHeight: 140),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF1E6AFB)),
-              boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 3))],
-            ),
-            child: ListView.builder(
-              shrinkWrap: true,
-              padding: EdgeInsets.zero,
-              itemCount: suggestions.length,
-              itemBuilder: (context, index) {
-                final suggestion = suggestions[index];
-                return ListTile(
-                  dense: true,
-                  title: Text(suggestion, style: const TextStyle(fontSize: 12, color: Color(0xFF1E293B))),
-                  trailing: const Icon(Icons.add_circle_outline, size: 16, color: Color(0xFF10B981)),
-                  onTap: () {
-                    setState(() {
-                      onAdd(suggestion);
-                      controller.clear();
-                    });
-                  },
-                );
-              },
-            ),
-          ),
-        ],
 
         if (selectedList.isNotEmpty) ...[
           const SizedBox(height: 8),

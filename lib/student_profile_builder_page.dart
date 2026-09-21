@@ -1,6 +1,7 @@
 import 'dart:io' show File;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:pol_app/widgets/search_picker_field.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:pol_app/api_service.dart';
@@ -259,9 +260,11 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
                       _buildLabel('مقطع تحصیلی'),
                       DropdownButtonFormField<String>(
                         value: degree,
+                        // Long names (e.g. full university names) are cut with … instead of overflowing.
+                        isExpanded: true,
                         decoration: _inputDec('انتخاب مقطع'),
                         items: _allDegrees.map((d) {
-                          return DropdownMenuItem(value: d, child: Text(d, style: const TextStyle(fontSize: 12)));
+                          return DropdownMenuItem(value: d, child: Text(d, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)));
                         }).toList(),
                         onChanged: (val) => degree = val ?? degree,
                       ),
@@ -269,9 +272,11 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
                       _buildLabel('نام دانشگاه *'),
                       DropdownButtonFormField<String>(
                         value: selectedUniversity,
+                        // Long names (e.g. full university names) are cut with … instead of overflowing.
+                        isExpanded: true,
                         decoration: _inputDec('انتخاب دانشگاه از لیست'),
                         items: _allUniversities.map((u) {
-                          return DropdownMenuItem(value: u, child: Text(u, style: const TextStyle(fontSize: 12)));
+                          return DropdownMenuItem(value: u, child: Text(u, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)));
                         }).toList(),
                         onChanged: (val) => setModalState(() => selectedUniversity = val),
                       ),
@@ -279,9 +284,11 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
                       _buildLabel('رشته تحصیلی *'),
                       DropdownButtonFormField<String>(
                         value: selectedMajor,
+                        // Long names (e.g. full university names) are cut with … instead of overflowing.
+                        isExpanded: true,
                         decoration: _inputDec('انتخاب رشته تحصیلی'),
                         items: _allMajors.map((m) {
-                          return DropdownMenuItem(value: m, child: Text(m, style: const TextStyle(fontSize: 12)));
+                          return DropdownMenuItem(value: m, child: Text(m, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)));
                         }).toList(),
                         onChanged: (val) => setModalState(() => selectedMajor = val),
                       ),
@@ -325,7 +332,7 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _buildLabel('معدل'),
+                                _buildLabel('معدل *'),
                                 TextField(
                                   controller: gpaCtrl,
                                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -364,8 +371,13 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
                               _showSnack('لطفاً دانشگاه و رشته تحصیلی را از لیست انتخاب کنید.');
                               return;
                             }
-                            final gpa = double.tryParse(gpaCtrl.text.trim());
-                            if (gpa != null && (gpa < 0 || gpa > 20)) {
+                            final gpaText = gpaCtrl.text.trim();
+                            if (gpaText.isEmpty) {
+                              _showSnack('لطفاً معدل را وارد کنید.');
+                              return;
+                            }
+                            final gpa = double.tryParse(gpaText);
+                            if (gpa == null || gpa < 0 || gpa > 20) {
                               _showSnack('معدل باید عددی بین ۰ تا ۲۰ باشد.');
                               return;
                             }
@@ -976,34 +988,24 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
   }
 
   Widget _buildSkillAutocompleteInput() {
-    final query = _skillController.text.trim().toLowerCase();
-    final suggestions = query.isEmpty
-        ? []
-        : _allSkillsOptions
-        .where((s) => s.toLowerCase().contains(query) && !_skills.contains(s))
-        .toList();
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
             Expanded(
-              child: TextField(
+              child: SearchPickerField(
                 controller: _skillController,
-                onChanged: (_) => setState(() {}),
+                options: _allSkillsOptions,
+                exclude: _skills,
+                onSelected: (skill) {
+                  setState(() {
+                    if (!_skills.contains(skill)) _skills.add(skill);
+                    _skillController.clear();
+                  });
+                },
                 onSubmitted: (_) => _addSkill(),
-                decoration: _inputDec('جستجوی مهارت (مثال: Flutter, Python)...').copyWith(
-                  suffixIcon: _skillController.text.isNotEmpty
-                      ? IconButton(
-                    icon: const Icon(Icons.clear, size: 16),
-                    onPressed: () {
-                      _skillController.clear();
-                      setState(() {});
-                    },
-                  )
-                      : null,
-                ),
+                decoration: _inputDec('جستجوی مهارت (مثال: Flutter, Python)...'),
               ),
             ),
             const SizedBox(width: 8),
@@ -1019,40 +1021,6 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
             ),
           ],
         ),
-
-        if (suggestions.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Container(
-            constraints: const BoxConstraints(maxHeight: 160),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF1E6AFB)),
-              boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 3))],
-            ),
-            child: ListView.builder(
-              shrinkWrap: true,
-              padding: EdgeInsets.zero,
-              itemCount: suggestions.length,
-              itemBuilder: (context, index) {
-                final suggestion = suggestions[index];
-                return ListTile(
-                  dense: true,
-                  title: Text(suggestion, style: const TextStyle(fontSize: 12, color: Color(0xFF1E293B))),
-                  trailing: const Icon(Icons.add_circle_outline, size: 16, color: Color(0xFF10B981)),
-                  onTap: () {
-                    setState(() {
-                      if (!_skills.contains(suggestion)) {
-                        _skills.add(suggestion);
-                      }
-                      _skillController.clear();
-                    });
-                  },
-                );
-              },
-            ),
-          ),
-        ],
       ],
     );
   }
@@ -1246,7 +1214,7 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
             children: [
               Icon(icon, size: 20, color: accentColor),
               const SizedBox(width: 8),
-              Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+              Expanded(child: Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)))),
             ],
           ),
           const Divider(height: 20),
@@ -1263,19 +1231,23 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
         color: Colors.white,
         boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, -2))],
       ),
+      // First step: "next" spans the whole row. From then on both buttons share it equally.
       child: Row(
         children: [
-          if (_currentStep > 0)
+          if (_currentStep > 0) ...[
             Expanded(
               child: OutlinedButton(
                 onPressed: () => setState(() => _currentStep--),
-                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 44),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
                 child: const Text('گام قبلی'),
               ),
             ),
-          if (_currentStep > 0) const SizedBox(width: 12),
+            const SizedBox(width: 12),
+          ],
           Expanded(
-            flex: 2,
             child: ElevatedButton(
               onPressed: _isSaving
                   ? null
@@ -1296,7 +1268,10 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
               ),
               child: _isSaving
                   ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : Text(_currentStep == 3 ? 'تکمیل و ورود به داشبورد' : 'گام بعدی', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  : FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(_currentStep == 3 ? 'تکمیل و ورود به داشبورد' : 'گام بعدی', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    ),
             ),
           ),
         ],

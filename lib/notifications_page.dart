@@ -77,10 +77,11 @@ class _NotificationsPageState extends State<NotificationsPage> {
         ),
       );
     } else if (type == 'interview' || type == 'decision') {
+      // link_id is the project: open the dashboard scrolled to that application.
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
-          builder: (context) => const DashboardPage(isCompany: false),
+          builder: (context) => DashboardPage(isCompany: false, focusProjectId: linkId),
         ),
             (route) => false,
       );

@@ -1,6 +1,7 @@
 import 'dart:io' show File;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:pol_app/widgets/search_picker_field.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:pol_app/api_service.dart';
@@ -260,9 +261,11 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                       _buildLabel('مقطع تحصیلی'),
                       DropdownButtonFormField<String>(
                         value: degree,
+                        // Long names (e.g. full university names) are cut with … instead of overflowing.
+                        isExpanded: true,
                         decoration: _inputDec('انتخاب مقطع'),
                         items: ['کاردانی', 'کارشناسی', 'کارشناسی ارشد', 'دکتری'].map((d) {
-                          return DropdownMenuItem(value: d, child: Text(d, style: const TextStyle(fontSize: 12)));
+                          return DropdownMenuItem(value: d, child: Text(d, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)));
                         }).toList(),
                         onChanged: (val) => degree = val ?? degree,
                       ),
@@ -270,9 +273,11 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                       _buildLabel('نام دانشگاه *'),
                       DropdownButtonFormField<String>(
                         value: selectedUniversity,
+                        // Long names (e.g. full university names) are cut with … instead of overflowing.
+                        isExpanded: true,
                         decoration: _inputDec('انتخاب دانشگاه از لیست'),
                         items: _allUniversities.map((u) {
-                          return DropdownMenuItem(value: u, child: Text(u, style: const TextStyle(fontSize: 12)));
+                          return DropdownMenuItem(value: u, child: Text(u, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)));
                         }).toList(),
                         onChanged: (val) => setModalState(() => selectedUniversity = val),
                       ),
@@ -280,9 +285,11 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                       _buildLabel('رشته تحصیلی *'),
                       DropdownButtonFormField<String>(
                         value: selectedMajor,
+                        // Long names (e.g. full university names) are cut with … instead of overflowing.
+                        isExpanded: true,
                         decoration: _inputDec('انتخاب رشته تحصیلی'),
                         items: _allMajors.map((m) {
-                          return DropdownMenuItem(value: m, child: Text(m, style: const TextStyle(fontSize: 12)));
+                          return DropdownMenuItem(value: m, child: Text(m, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)));
                         }).toList(),
                         onChanged: (val) => setModalState(() => selectedMajor = val),
                       ),
@@ -326,7 +333,7 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _buildLabel('معدل'),
+                                _buildLabel('معدل *'),
                                 TextField(
                                   controller: gpaCtrl,
                                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -365,8 +372,13 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                               _showSnack('لطفاً دانشگاه و رشته تحصیلی را از لیست انتخاب کنید.');
                               return;
                             }
-                            final gpa = double.tryParse(gpaCtrl.text.trim());
-                            if (gpa != null && (gpa < 0 || gpa > 20)) {
+                            final gpaText = gpaCtrl.text.trim();
+                            if (gpaText.isEmpty) {
+                              _showSnack('لطفاً معدل را وارد کنید.');
+                              return;
+                            }
+                            final gpa = double.tryParse(gpaText);
+                            if (gpa == null || gpa < 0 || gpa > 20) {
                               _showSnack('معدل باید عددی بین ۰ تا ۲۰ باشد.');
                               return;
                             }
@@ -591,34 +603,24 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
   }
 
   Widget _buildSkillAutocompleteInput() {
-    final query = _skillInputController.text.trim().toLowerCase();
-    final suggestions = query.isEmpty
-        ? []
-        : _allSkillsOptions
-        .where((s) => s.toLowerCase().contains(query) && !_skills.contains(s))
-        .toList();
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
             Expanded(
-              child: TextField(
+              child: SearchPickerField(
                 controller: _skillInputController,
-                onChanged: (_) => setState(() {}),
+                options: _allSkillsOptions,
+                exclude: _skills,
+                onSelected: (skill) {
+                  setState(() {
+                    if (!_skills.contains(skill)) _skills.add(skill);
+                    _skillInputController.clear();
+                  });
+                },
                 onSubmitted: (_) => _addSkill(),
-                decoration: _inputDec('جستجوی مهارت (مثال: Flutter, Python)...').copyWith(
-                  suffixIcon: _skillInputController.text.isNotEmpty
-                      ? IconButton(
-                    icon: const Icon(Icons.clear, size: 16),
-                    onPressed: () {
-                      _skillInputController.clear();
-                      setState(() {});
-                    },
-                  )
-                      : null,
-                ),
+                decoration: _inputDec('جستجوی مهارت (مثال: Flutter, Python)...'),
               ),
             ),
             const SizedBox(width: 8),
@@ -634,40 +636,6 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
             ),
           ],
         ),
-
-        if (suggestions.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Container(
-            constraints: const BoxConstraints(maxHeight: 160),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF1E6AFB)),
-              boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 3))],
-            ),
-            child: ListView.builder(
-              shrinkWrap: true,
-              padding: EdgeInsets.zero,
-              itemCount: suggestions.length,
-              itemBuilder: (context, index) {
-                final suggestion = suggestions[index];
-                return ListTile(
-                  dense: true,
-                  title: Text(suggestion, style: const TextStyle(fontSize: 12, color: Color(0xFF1E293B))),
-                  trailing: const Icon(Icons.add_circle_outline, size: 16, color: Color(0xFF10B981)),
-                  onTap: () {
-                    setState(() {
-                      if (!_skills.contains(suggestion)) {
-                        _skills.add(suggestion);
-                      }
-                      _skillInputController.clear();
-                    });
-                  },
-                );
-              },
-            ),
-          ),
-        ],
       ],
     );
   }
