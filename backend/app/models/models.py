@@ -188,6 +188,12 @@ class Major(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String, unique=True, nullable=False)
+    # Degree names this major is offered at (e.g. ["کارشناسی ارشد", "دکتری"]).
+    # Empty or null means every degree, e.g. "سایر".
+    degrees = Column(JSON, nullable=True)
+    # For majors not offered at کارشناسی: the bachelor major it builds on. Match scoring
+    # compares bachelor majors only, so a master's or PhD major counts as this one.
+    bachelor_major = Column(String, nullable=True)
 
 class Degree(Base):
     __tablename__ = "options_degrees"

@@ -1,7 +1,7 @@
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -33,6 +33,15 @@ class ActiveStatus(BaseModel):
 
 class OptionIn(BaseModel):
     name: str = Field(..., min_length=1, max_length=150)
+    # Majors only: the degrees it's offered at; empty means every degree.
+    degrees: Optional[List[str]] = None
+    # Majors only, when not offered at کارشناسی: the bachelor major it counts as for scoring.
+    bachelor_major: Optional[str] = None
+
+
+class MajorDegreesIn(BaseModel):
+    degrees: List[str] = []
+    bachelor_major: Optional[str] = None
 
 
 class BroadcastIn(BaseModel):
@@ -362,10 +371,42 @@ def _option_model(kind: str):
     return model
 
 
+def _option_row(o) -> dict:
+    row = {"id": str(o.id), "name": o.name}
+    if isinstance(o, models.Major):
+        row["degrees"] = o.degrees or []
+        row["bachelor_major"] = o.bachelor_major
+    return row
+
+
+def _clean_bachelor_major(db: Session, degrees: Optional[List[str]], bachelor_major: Optional[str], name: str) -> Optional[str]:
+    """Bachelor majors (and every-degree majors) need none; the rest must name a bachelor major."""
+    if not degrees or "کارشناسی" in degrees:
+        return None
+    value = (bachelor_major or "").strip()
+    if not value:
+        raise HTTPException(status_code=400, detail="برای رشته‌های غیر کارشناسی، رشته کارشناسی مرتبط را انتخاب کنید.")
+    bachelor = [m.name for m in db.query(models.Major).all() if not m.degrees or "کارشناسی" in m.degrees]
+    if value not in bachelor or value == name:
+        raise HTTPException(status_code=400, detail="رشته کارشناسی مرتبط نامعتبر است.")
+    return value
+
+
+def _clean_degrees(db: Session, degrees: Optional[List[str]]) -> Optional[List[str]]:
+    """Known degree names in the degrees table's order; None when empty (= every degree)."""
+    if not degrees:
+        return None
+    known = [d.name for d in db.query(models.Degree).all()]
+    unknown = [d for d in degrees if d not in known]
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"مقطع نامعتبر: {'، '.join(unknown)}")
+    return [d for d in known if d in degrees]
+
+
 @router.get("/options")
 def list_options(db: Session = Depends(get_db), admin: models.User = Depends(get_current_admin)):
     return {
-        kind: [{"id": str(o.id), "name": o.name} for o in db.query(model).order_by(model.name).all()]
+        kind: [_option_row(o) for o in db.query(model).order_by(model.name).all()]
         for kind, model in OPTION_MODELS.items()
     }
 
@@ -379,9 +420,23 @@ def add_option(kind: str, body: OptionIn, db: Session = Depends(get_db), admin: 
     if db.query(model).filter(model.name == name).first():
         raise HTTPException(status_code=400, detail="این گزینه از قبل وجود دارد.")
     option = model(name=name)
+    if model is models.Major:
+        option.degrees = _clean_degrees(db, body.degrees)
+        option.bachelor_major = _clean_bachelor_major(db, option.degrees, body.bachelor_major, name)
     db.add(option)
     db.commit()
-    return {"id": str(option.id), "name": option.name}
+    return _option_row(option)
+
+
+@router.patch("/options/majors/{option_id}")
+def set_major_degrees(option_id: str, body: MajorDegreesIn, db: Session = Depends(get_db), admin: models.User = Depends(get_current_admin)):
+    major = db.query(models.Major).filter(models.Major.id == _uuid(option_id)).first()
+    if not major:
+        raise HTTPException(status_code=404, detail="رشته یافت نشد.")
+    major.degrees = _clean_degrees(db, body.degrees)
+    major.bachelor_major = _clean_bachelor_major(db, major.degrees, body.bachelor_major, major.name)
+    db.commit()
+    return _option_row(major)
 
 
 @router.delete("/options/{kind}/{option_id}")

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 from typing import List, Optional
 from datetime import datetime, timezone
 import uuid
@@ -9,7 +9,7 @@ import os
 from ..db.session import get_db
 from ..models import models
 from ..schemas import schemas
-from .auth import get_current_user, calculate_profile_completion
+from .auth import get_current_user, calculate_profile_completion, missing_required_profile_fields
 
 router = APIRouter()
 
@@ -59,11 +59,20 @@ def to_shamsi(dt) -> str:
 
     return f"{jy}/{jm:02d}/{day_no + 1:02d}"
 
+def majors_by_degree(db: Session) -> dict:
+    """{degree: [major names offered at it]}; majors without degrees are offered at every degree."""
+    majors = db.query(models.Major).all()
+    return {
+        d.name: [m.name for m in majors if not m.degrees or d.name in m.degrees]
+        for d in db.query(models.Degree).all()
+    }
+
 @router.get("/options")
 def get_options(db: Session = Depends(get_db)):
     return {
         "universities": [u.name for u in db.query(models.University).all()],
         "majors": [m.name for m in db.query(models.Major).all()],
+        "majors_by_degree": majors_by_degree(db),
         "degrees": [d.name for d in db.query(models.Degree).all()],
         "cities": [c.name for c in db.query(models.City).all()],
         "categories": [c.name for c in db.query(models.Category).all()],
@@ -137,6 +146,31 @@ def _ranked_score(candidates: List[str], targets: List[str]) -> Optional[float]:
     return {0: 100.0, 1: 85.0, 2: 70.0}.get(min(ranks), 60.0)
 
 
+def bachelor_major_map(db: Session) -> dict:
+    """{major name: the bachelor major it counts as} for majors that aren't bachelor majors."""
+    return {m.name: m.bachelor_major for m in db.query(models.Major).all() if m.bachelor_major}
+
+
+def _bachelor_map_for(obj) -> dict:
+    """bachelor_major_map for obj's session, built once per request (session) and reused."""
+    session = object_session(obj)
+    if session is None:
+        return {}
+    if "bachelor_major_map" not in session.info:
+        session.info["bachelor_major_map"] = bachelor_major_map(session)
+    return session.info["bachelor_major_map"]
+
+
+def to_bachelor_major(name: Optional[str], mapping: dict) -> Optional[str]:
+    """The bachelor major a major counts as for scoring: its mapping if it has one,
+    otherwise the field part of a "field - specialization" name, otherwise itself."""
+    if not name:
+        return None
+    if name in mapping:
+        return mapping[name]
+    return name.split(" - ")[0].strip()
+
+
 def calculate_match_score(student_profile: models.StudentProfile, project: models.Project) -> int:
     if not student_profile:
         return 50
@@ -149,9 +183,15 @@ def calculate_match_score(student_profile: models.StudentProfile, project: model
         [student_profile.university] + [e.get("university") for e in educations],
         project.target_universities or [],
     )
+    # Majors are compared at bachelor level only: a master's or PhD major counts as the
+    # bachelor major it builds on, and projects target bachelor majors.
+    bachelor_of = _bachelor_map_for(student_profile)
+    target_majors = list(dict.fromkeys(
+        b for b in (to_bachelor_major(t, bachelor_of) for t in (project.target_majors or [])) if b
+    ))
     major_score = _ranked_score(
-        [student_profile.major] + [e.get("major") for e in educations],
-        project.target_majors or [],
+        [to_bachelor_major(m, bachelor_of) for m in [student_profile.major] + [e.get("major") for e in educations]],
+        target_majors,
     )
     # No universal ladder here: a کارآموزی posting may rank کارشناسی top and
     # دکتری last. An employer who leaves the list empty scores no degree at all.
@@ -724,6 +764,14 @@ def apply_for_project(
 ):
     if current_user.role != models.UserRole.STUDENT:
         raise HTTPException(status_code=403, detail="تنها دانشجویان مجاز به ارسال درخواست هستند.")
+
+    # Projects can be browsed with an incomplete profile, but not applied to.
+    missing = missing_required_profile_fields(current_user.student_profile)
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail="برای ارسال درخواست ابتدا پروفایل خود را کامل کنید: " + "، ".join(missing),
+        )
 
     project = db.query(models.Project).filter(models.Project.id == project_id).first()
     if not project:

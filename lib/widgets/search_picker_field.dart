@@ -17,6 +17,10 @@ class SearchPickerField extends StatefulWidget {
   final TextStyle? style;
   final int maxVisibleItems;
 
+  /// Single-choice use (e.g. a university): close the list after a pick instead of keeping
+  /// it open for the next one.
+  final bool closeOnSelect;
+
   const SearchPickerField({
     super.key,
     required this.controller,
@@ -27,6 +31,7 @@ class SearchPickerField extends StatefulWidget {
     this.decoration = const InputDecoration(),
     this.style,
     this.maxVisibleItems = 4,
+    this.closeOnSelect = false,
   });
 
   @override
@@ -98,15 +103,21 @@ class _SearchPickerFieldState extends State<SearchPickerField> {
 
   List<String> get _matches {
     final query = widget.controller.text.trim().toLowerCase();
-    return widget.options
-        .where((o) => !widget.exclude.contains(o) && (query.isEmpty || o.toLowerCase().contains(query)))
-        .toList();
+    final available = widget.options.where((o) => !widget.exclude.contains(o));
+    // When the field already holds a chosen option (single-choice use), reopening it
+    // shows the whole list so another option can be picked, not just the current one.
+    if (query.isEmpty || available.any((o) => o.toLowerCase() == query)) return available.toList();
+    return available.where((o) => o.toLowerCase().contains(query)).toList();
   }
 
   void _pick(String option) {
     widget.onSelected(option);
-    // Keep focus so several items can be added in a row.
-    _focusNode.requestFocus();
+    if (widget.closeOnSelect) {
+      _focusNode.unfocus();
+    } else {
+      // Keep focus so several items can be added in a row.
+      _focusNode.requestFocus();
+    }
   }
 
   @override
@@ -125,6 +136,10 @@ class _SearchPickerFieldState extends State<SearchPickerField> {
                 controller: widget.controller,
                 focusNode: _focusNode,
                 onTap: _onFieldTap,
+                // Flutter only unfocuses on outside taps on web/desktop; do it on phones too so the
+                // list never stays open over the rest of the form. Taps on the list don't count
+                // (it's wrapped in TextFieldTapRegion).
+                onTapOutside: (_) => _focusNode.unfocus(),
                 style: widget.style,
                 onSubmitted: (value) {
                   widget.onSubmitted?.call(value);

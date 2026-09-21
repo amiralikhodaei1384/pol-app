@@ -1,6 +1,7 @@
 import 'dart:io' show File;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:pol_app/widgets/leave_wizard_dialog.dart';
 import 'package:pol_app/widgets/search_picker_field.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
@@ -52,6 +53,8 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
   // Filled from /projects/options.
   List<String> _allUniversities = [];
   List<String> _allMajors = [];
+  // Majors offered at each degree; the education form only lists the chosen degree's majors.
+  Map<String, List<String>> _majorsByDegree = {};
   List<String> _allSkillsOptions = [];
   List<String> _allDegrees = ['کاردانی', 'کارشناسی', 'کارشناسی ارشد', 'دکتری'];
 
@@ -70,6 +73,7 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
       setState(() {
         if (options['universities'] != null) _allUniversities = (options['universities'] as List).cast<String>();
         if (options['majors'] != null) _allMajors = (options['majors'] as List).cast<String>();
+        _majorsByDegree = ApiService.majorsByDegree(options);
         if (options['skills'] != null) _allSkillsOptions = (options['skills'] as List).cast<String>();
         final degreeOpts = options['degrees'];
         if (degreeOpts is List && degreeOpts.isNotEmpty) _allDegrees = degreeOpts.cast<String>();
@@ -227,10 +231,16 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
     }
   }
 
+  /// Majors offered at [degree]; every major if the server didn't say.
+  List<String> _majorsFor(String degree) => _majorsByDegree[degree] ?? _allMajors;
+
   void _showAddEducationDialog() {
     String degree = _allDegrees.contains('کارشناسی') ? 'کارشناسی' : _allDegrees.first;
     String? selectedUniversity;
     String? selectedMajor;
+    // Searchable pickers: the typed text only counts once it's exactly an option from the list.
+    final universityCtrl = TextEditingController();
+    final majorCtrl = TextEditingController();
     final startYearCtrl = TextEditingController();
     final endYearCtrl = TextEditingController();
     final gpaCtrl = TextEditingController();
@@ -266,31 +276,31 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
                         items: _allDegrees.map((d) {
                           return DropdownMenuItem(value: d, child: Text(d, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)));
                         }).toList(),
-                        onChanged: (val) => degree = val ?? degree,
+                        // A new degree has its own majors, so a major picked for the old one is cleared.
+                        onChanged: (val) => setModalState(() {
+                          degree = val ?? degree;
+                          if (!_majorsFor(degree).contains(majorCtrl.text.trim())) majorCtrl.clear();
+                        }),
                       ),
                       const SizedBox(height: 12),
                       _buildLabel('نام دانشگاه *'),
-                      DropdownButtonFormField<String>(
-                        value: selectedUniversity,
-                        // Long names (e.g. full university names) are cut with … instead of overflowing.
-                        isExpanded: true,
-                        decoration: _inputDec('انتخاب دانشگاه از لیست'),
-                        items: _allUniversities.map((u) {
-                          return DropdownMenuItem(value: u, child: Text(u, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)));
-                        }).toList(),
-                        onChanged: (val) => setModalState(() => selectedUniversity = val),
+                      SearchPickerField(
+                        controller: universityCtrl,
+                        options: _allUniversities,
+                        style: const TextStyle(fontSize: 12),
+                        decoration: _inputDec('جستجو و انتخاب دانشگاه از لیست'),
+                        closeOnSelect: true,
+                        onSelected: (u) => universityCtrl.text = u,
                       ),
                       const SizedBox(height: 12),
                       _buildLabel('رشته تحصیلی *'),
-                      DropdownButtonFormField<String>(
-                        value: selectedMajor,
-                        // Long names (e.g. full university names) are cut with … instead of overflowing.
-                        isExpanded: true,
-                        decoration: _inputDec('انتخاب رشته تحصیلی'),
-                        items: _allMajors.map((m) {
-                          return DropdownMenuItem(value: m, child: Text(m, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)));
-                        }).toList(),
-                        onChanged: (val) => setModalState(() => selectedMajor = val),
+                      SearchPickerField(
+                        controller: majorCtrl,
+                        options: _majorsFor(degree),
+                        style: const TextStyle(fontSize: 12),
+                        decoration: _inputDec('جستجو و انتخاب رشته مقطع $degree'),
+                        closeOnSelect: true,
+                        onSelected: (m) => majorCtrl.text = m,
                       ),
                       const SizedBox(height: 12),
                       Row(
@@ -367,6 +377,10 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
                         height: 44,
                         child: ElevatedButton(
                           onPressed: () {
+                            final uniText = universityCtrl.text.trim();
+                            final majorText = majorCtrl.text.trim();
+                            selectedUniversity = _allUniversities.contains(uniText) ? uniText : null;
+                            selectedMajor = _majorsFor(degree).contains(majorText) ? majorText : null;
                             if (selectedUniversity == null || selectedMajor == null) {
                               _showSnack('لطفاً دانشگاه و رشته تحصیلی را از لیست انتخاب کنید.');
                               return;
@@ -619,32 +633,66 @@ class _StudentProfileBuilderPageState extends State<StudentProfileBuilderPage> {
     }
   }
 
+  /// Leaves the wizard for the dashboard; the profile can be finished later from «ویرایش پروفایل من».
+  Future<void> _leaveWizard() async {
+    final leave = await confirmLeaveWizard(
+      context,
+      message: 'می‌توانید هر زمان از منوی پروفایل و گزینه «ویرایش پروفایل من» تکمیل آن را ادامه دهید. '
+          'تا آن موقع امتیاز تطابق شما با پروژه‌ها پایین‌تر خواهد بود.',
+    );
+    if (!leave || !mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => const DashboardPage(isCompany: false)),
+      (route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
-        appBar: AppBar(
-          title: const Text('تکمیل پروفایل دانشجویی', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          backgroundColor: const Color(0xFF1E6AFB),
-          foregroundColor: Colors.white,
-          centerTitle: true,
-          elevation: 0,
-        ),
-        body: _isLoadingProfile
-            ? const Center(child: CircularProgressIndicator(color: Color(0xFF1E6AFB)))
-            : Column(
-          children: [
-            _buildStepProgressHeader(),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20.0),
-                child: _buildCurrentStepContent(),
+    // Back steps through the wizard; on the first step it offers to finish later.
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_currentStep > 0) {
+          setState(() => _currentStep--);
+        } else {
+          _leaveWizard();
+        }
+      },
+      child: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          backgroundColor: const Color(0xFFF8FAFC),
+          appBar: AppBar(
+            title: const Text('تکمیل پروفایل دانشجویی', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            backgroundColor: const Color(0xFF1E6AFB),
+            foregroundColor: Colors.white,
+            centerTitle: true,
+            elevation: 0,
+            actions: [
+              TextButton(
+                onPressed: _leaveWizard,
+                style: TextButton.styleFrom(foregroundColor: Colors.white),
+                child: const Text('بعداً تکمیل می‌کنم', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
               ),
-            ),
-            _buildBottomNavigation(),
-          ],
+            ],
+          ),
+          body: _isLoadingProfile
+              ? const Center(child: CircularProgressIndicator(color: Color(0xFF1E6AFB)))
+              : Column(
+            children: [
+              _buildStepProgressHeader(),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20.0),
+                  child: _buildCurrentStepContent(),
+                ),
+              ),
+              _buildBottomNavigation(),
+            ],
+          ),
         ),
       ),
     );

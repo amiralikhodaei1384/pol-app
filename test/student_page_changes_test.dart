@@ -259,10 +259,10 @@ void main() {
     await tester.ensureVisible(find.text('افزودن مقطع تحصیلی جدید'));
     await tester.tap(find.text('افزودن مقطع تحصیلی جدید'));
     await tester.pumpAndSettle();
-    for (final pick in [('انتخاب دانشگاه از لیست', 'دانشگاه تهران'), ('انتخاب رشته تحصیلی', 'مهندسی کامپیوتر')]) {
-      await tester.tap(find.ancestor(of: find.text(pick.$1), matching: find.byType(DropdownButtonFormField<String>)));
+    for (final pick in [('جستجو و انتخاب دانشگاه از لیست', 'دانشگاه تهران'), ('جستجو و انتخاب رشته مقطع کارشناسی', 'مهندسی کامپیوتر')]) {
+      await tester.tap(find.widgetWithText(TextField, pick.$1));
       await tester.pumpAndSettle();
-      await tester.tap(find.text(pick.$2).last);
+      await tester.tap(find.descendant(of: find.byType(ListView), matching: find.text(pick.$2)));
       await tester.pumpAndSettle();
     }
     expect(find.text('معدل *'), findsOneWidget);

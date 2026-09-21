@@ -3,6 +3,7 @@ import 'package:pol_app/api_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'employer_applications_page.dart';
+import 'student_profile_page.dart';
 
 /// Project details with match score and apply action.
 class ProjectDetailsPage extends StatefulWidget {
@@ -24,10 +25,34 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
   late bool _isApplied;
   final _messageController = TextEditingController();
 
+  // Required profile fields the student still has to fill in before applying.
+  // Null until known; the server enforces the rule either way.
+  List<String>? _missingFields;
+
   @override
   void initState() {
     super.initState();
     _isApplied = widget.project['is_applied'] ?? false;
+    if (!widget.isCompany) _loadMissingFields();
+  }
+
+  Future<void> _loadMissingFields() async {
+    final prefs = await SharedPreferences.getInstance();
+    final me = await ApiService.getMe(prefs.getString('access_token') ?? '');
+    final missing = me?['profile']?['missing_required_fields'];
+    if (!mounted || me == null) return;
+    setState(() {
+      _missingFields = missing is List
+          ? missing.map((e) => e.toString()).toList()
+          // No profile at all: everything required is missing.
+          : (me['profile'] == null ? ['نام و نام خانوادگی', 'حداقل یک سابقه تحصیلی کامل (دانشگاه، رشته و معدل)'] : <String>[]);
+    });
+  }
+
+  Future<void> _openProfileEditor() async {
+    await Navigator.push(context, MaterialPageRoute(builder: (context) => const StudentProfilePage()));
+    // Back from editing: check again whether applying is allowed now.
+    if (mounted) await _loadMissingFields();
   }
 
   Future<void> _handleApply() async {
@@ -36,7 +61,7 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
 
     setState(() => _isApplying = true);
 
-    final success = await ApiService.applyForProject(
+    final error = await ApiService.applyForProject(
       token,
       widget.project['id'].toString(),
       message: _messageController.text.trim(),
@@ -44,7 +69,7 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
 
     setState(() => _isApplying = false);
 
-    if (success && mounted) {
+    if (error == null && mounted) {
       setState(() => _isApplied = true);
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -54,12 +79,12 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
         ),
       );
     } else if (mounted) {
+      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('خطا در ارسال درخواست یا درخواست قبلاً ثبت شده است.'),
-          backgroundColor: Colors.redAccent,
-        ),
+        SnackBar(content: Text(error!), backgroundColor: Colors.redAccent),
       );
+      // The server may know about a missing field this page didn't; refresh the note.
+      _loadMissingFields();
     }
   }
 
@@ -88,7 +113,7 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('ارسال درخواست همکاری (اپلای)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    const Expanded(child: Text('ارسال درخواست همکاری (اپلای)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold))),
                     IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
                   ],
                 ),
@@ -194,15 +219,28 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
                     const SizedBox(height: 12),
                     Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B), height: 1.4)),
                     const SizedBox(height: 16),
-                    Row(
+                    // Location and deadline sit side by side, and wrap onto two lines on narrow phones.
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      spacing: 12,
+                      runSpacing: 6,
                       children: [
-                        const Icon(Icons.location_on_outlined, size: 15, color: Colors.grey),
-                        const SizedBox(width: 4),
-                        Text('مکان: $city', style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                        const Spacer(),
-                        const Icon(Icons.calendar_today_outlined, size: 14, color: Colors.grey),
-                        const SizedBox(width: 6),
-                        Text('مهلت ارسال رزومه: $deadline', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.location_on_outlined, size: 15, color: Colors.grey),
+                            const SizedBox(width: 4),
+                            Flexible(child: Text('مکان: $city', style: const TextStyle(fontSize: 11, color: Colors.grey))),
+                          ],
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.calendar_today_outlined, size: 14, color: Colors.grey),
+                            const SizedBox(width: 6),
+                            Flexible(child: Text('مهلت ارسال رزومه: $deadline', style: const TextStyle(fontSize: 11, color: Colors.grey))),
+                          ],
+                        ),
                       ],
                     )
                   ],
@@ -375,7 +413,11 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
               color: Colors.white,
               boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -2))],
             ),
-            child: SizedBox(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (!widget.isCompany && !_isApplied && (_missingFields?.isNotEmpty ?? false)) _buildMissingFieldsNote(),
+                SizedBox(
               height: 48,
               child: widget.isCompany
                   ? ElevatedButton.icon(
@@ -398,6 +440,8 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               )
+                  : (!_isApplied && (_missingFields?.isNotEmpty ?? false))
+                  ? _buildCompleteProfileButton()
                   : ElevatedButton(
                 onPressed: _isApplied ? null : _showApplyDialog,
                 style: ElevatedButton.styleFrom(
@@ -411,7 +455,58 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
                 ),
               ),
             ),
+              ],
+            ),
           )
+      ),
+    );
+  }
+
+  Widget _buildCompleteProfileButton() {
+    return ElevatedButton.icon(
+      onPressed: _openProfileEditor,
+      icon: const Icon(Icons.person_outline_rounded, size: 18),
+      label: const Text('تکمیل پروفایل برای ارسال درخواست', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFFF59E0B),
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  /// Above the bottom button while applying is locked: what's missing, in plain words.
+  Widget _buildMissingFieldsNote() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFFDE68A)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.lock_outline_rounded, size: 16, color: Color(0xFFB45309)),
+              SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'برای ارسال درخواست، ابتدا این موارد را در پروفایل تکمیل کنید:',
+                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF92400E)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ..._missingFields!.map((f) => Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text('• $f', style: const TextStyle(fontSize: 11, color: Color(0xFF92400E))),
+              )),
+        ],
       ),
     );
   }

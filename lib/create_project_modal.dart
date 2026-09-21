@@ -39,6 +39,8 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
   List<String> _categories = [];
   List<String> _allUniversities = [];
   List<String> _allMajors = [];
+  // Majors offered at each degree; the majors field uses the bachelor list.
+  Map<String, List<String>> _majorsByDegree = {};
   List<String> _allDegrees = [];
   List<String> _allSkillsOptions = [];
 
@@ -57,6 +59,10 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
     _loadOptions();
   }
 
+  /// Projects target bachelor majors only: scoring compares every student at bachelor level,
+  /// counting a master's or PhD major as the bachelor major it builds on.
+  List<String> get _majorOptions => _majorsByDegree['کارشناسی'] ?? _allMajors;
+
   Future<void> _loadOptions() async {
     final opts = await ApiService.fetchOptions();
     if (opts != null && mounted) {
@@ -66,6 +72,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
         if (opts['categories'] != null) _categories = (opts['categories'] as List).cast<String>();
         if (opts['universities'] != null) _allUniversities = (opts['universities'] as List).cast<String>();
         if (opts['majors'] != null) _allMajors = (opts['majors'] as List).cast<String>();
+        _majorsByDegree = ApiService.majorsByDegree(opts);
         if (opts['degrees'] != null) _allDegrees = (opts['degrees'] as List).cast<String>();
         if (opts['skills'] != null) _allSkillsOptions = (opts['skills'] as List).cast<String>();
       });
@@ -302,7 +309,22 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
     required Function(String) onAdd,
     required Function(String) onRemove,
     required Color chipColor,
+    bool allowFreeText = true,
   }) {
+    // Adds typed text; without free text, only an exact option from the list is accepted.
+    void addTyped() {
+      final val = controller.text.trim();
+      if (val.isEmpty) return;
+      if (!allowFreeText && !allOptions.contains(val)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('لطفاً یکی از گزینه‌های فهرست را انتخاب کنید.')),
+        );
+        return;
+      }
+      onAdd(val);
+      controller.clear();
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -320,24 +342,13 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                   onAdd(option);
                   controller.clear();
                 },
-                onSubmitted: (val) {
-                  if (val.trim().isNotEmpty) {
-                    onAdd(val.trim());
-                    controller.clear();
-                  }
-                },
+                onSubmitted: allowFreeText ? (_) => addTyped() : null,
                 decoration: _inputDecoration(hint),
               ),
             ),
             const SizedBox(width: 8),
             ElevatedButton(
-              onPressed: () {
-                if (controller.text.trim().isNotEmpty) {
-                  onAdd(controller.text.trim());
-                  controller.clear();
-                  setState(() {});
-                }
-              },
+              onPressed: () => setState(addTyped),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF1E6AFB),
                 foregroundColor: Colors.white,
@@ -516,18 +527,6 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                         const SizedBox(height: 16),
 
                         _buildAutocompleteSearchInput(
-                          label: 'رشته‌های تحصیلی مرتبط (اختیاری)',
-                          hint: 'جستجوی رشته (مثال: کامپیوتر، برق)...',
-                          controller: _majorInputController,
-                          allOptions: _allMajors,
-                          selectedList: _selectedMajors,
-                          onAdd: _addMajor,
-                          onRemove: _removeMajor,
-                          chipColor: const Color(0xFF10B981),
-                        ),
-                        const SizedBox(height: 16),
-
-                        _buildAutocompleteSearchInput(
                           label: 'مقاطع تحصیلی مورد نظر (اختیاری)',
                           hint: 'به ترتیب اولویت (مثال: کارشناسی برای کارآموزی)...',
                           controller: _degreeInputController,
@@ -536,6 +535,20 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                           onAdd: _addDegree,
                           onRemove: _removeDegree,
                           chipColor: const Color(0xFFF59E0B),
+                        ),
+                        const SizedBox(height: 16),
+
+                        _buildAutocompleteSearchInput(
+                          label: 'رشته‌های تحصیلی مرتبط در مقطع کارشناسی (اختیاری)',
+                          hint: 'جستجوی رشته کارشناسی (مثال: کامپیوتر، برق)...',
+                          controller: _majorInputController,
+                          allOptions: _majorOptions,
+                          // Only real bachelor majors: free text could never match anyone.
+                          allowFreeText: false,
+                          selectedList: _selectedMajors,
+                          onAdd: _addMajor,
+                          onRemove: _removeMajor,
+                          chipColor: const Color(0xFF10B981),
                         ),
                         const SizedBox(height: 16),
 

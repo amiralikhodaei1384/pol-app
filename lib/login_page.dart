@@ -172,7 +172,8 @@ class _LoginPageState extends State<LoginPage> {
                         children: [
                           const Text('عضو نیستید؟', style: TextStyle(color: Color(0xFF64748B))),
                           TextButton(
-                            onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const RegistrationPage())),
+                            // push (not replace) so registration can come back here.
+                            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const RegistrationPage())),
                             child: const Text('ثبت‌نام کنید', style: TextStyle(color: Color(0xFF0072FF), fontWeight: FontWeight.bold)),
                           ),
                         ],
@@ -233,7 +234,7 @@ class _LoginPageState extends State<LoginPage> {
                 constraints: const BoxConstraints(),
               ),
               const SizedBox(width: 8),
-              const Text('ورود رمز عبور', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+              const Expanded(child: Text('ورود رمز عبور', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)))),
             ],
           ),
           const SizedBox(height: 32),

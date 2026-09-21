@@ -53,6 +53,8 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
   // Filled from /projects/options.
   List<String> _allUniversities = [];
   List<String> _allMajors = [];
+  // Majors offered at each degree; the education form only lists the chosen degree's majors.
+  Map<String, List<String>> _majorsByDegree = {};
   List<String> _allSkillsOptions = [];
 
   @override
@@ -71,6 +73,7 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
       setState(() {
         if (options['universities'] != null) _allUniversities = (options['universities'] as List).cast<String>();
         if (options['majors'] != null) _allMajors = (options['majors'] as List).cast<String>();
+        _majorsByDegree = ApiService.majorsByDegree(options);
         if (options['skills'] != null) _allSkillsOptions = (options['skills'] as List).cast<String>();
       });
     }
@@ -228,10 +231,16 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
     }
   }
 
+  /// Majors offered at [degree]; every major if the server didn't say.
+  List<String> _majorsFor(String degree) => _majorsByDegree[degree] ?? _allMajors;
+
   void _showAddEducationDialog() {
     String degree = 'کارشناسی';
     String? selectedUniversity;
     String? selectedMajor;
+    // Searchable pickers: the typed text only counts once it's exactly an option from the list.
+    final universityCtrl = TextEditingController();
+    final majorCtrl = TextEditingController();
     final startYearCtrl = TextEditingController();
     final endYearCtrl = TextEditingController();
     final gpaCtrl = TextEditingController();
@@ -267,31 +276,31 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                         items: ['کاردانی', 'کارشناسی', 'کارشناسی ارشد', 'دکتری'].map((d) {
                           return DropdownMenuItem(value: d, child: Text(d, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)));
                         }).toList(),
-                        onChanged: (val) => degree = val ?? degree,
+                        // A new degree has its own majors, so a major picked for the old one is cleared.
+                        onChanged: (val) => setModalState(() {
+                          degree = val ?? degree;
+                          if (!_majorsFor(degree).contains(majorCtrl.text.trim())) majorCtrl.clear();
+                        }),
                       ),
                       const SizedBox(height: 12),
                       _buildLabel('نام دانشگاه *'),
-                      DropdownButtonFormField<String>(
-                        value: selectedUniversity,
-                        // Long names (e.g. full university names) are cut with … instead of overflowing.
-                        isExpanded: true,
-                        decoration: _inputDec('انتخاب دانشگاه از لیست'),
-                        items: _allUniversities.map((u) {
-                          return DropdownMenuItem(value: u, child: Text(u, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)));
-                        }).toList(),
-                        onChanged: (val) => setModalState(() => selectedUniversity = val),
+                      SearchPickerField(
+                        controller: universityCtrl,
+                        options: _allUniversities,
+                        style: const TextStyle(fontSize: 12),
+                        decoration: _inputDec('جستجو و انتخاب دانشگاه از لیست'),
+                        closeOnSelect: true,
+                        onSelected: (u) => universityCtrl.text = u,
                       ),
                       const SizedBox(height: 12),
                       _buildLabel('رشته تحصیلی *'),
-                      DropdownButtonFormField<String>(
-                        value: selectedMajor,
-                        // Long names (e.g. full university names) are cut with … instead of overflowing.
-                        isExpanded: true,
-                        decoration: _inputDec('انتخاب رشته تحصیلی'),
-                        items: _allMajors.map((m) {
-                          return DropdownMenuItem(value: m, child: Text(m, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)));
-                        }).toList(),
-                        onChanged: (val) => setModalState(() => selectedMajor = val),
+                      SearchPickerField(
+                        controller: majorCtrl,
+                        options: _majorsFor(degree),
+                        style: const TextStyle(fontSize: 12),
+                        decoration: _inputDec('جستجو و انتخاب رشته مقطع $degree'),
+                        closeOnSelect: true,
+                        onSelected: (m) => majorCtrl.text = m,
                       ),
                       const SizedBox(height: 12),
                       Row(
@@ -368,6 +377,10 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                         height: 44,
                         child: ElevatedButton(
                           onPressed: () {
+                            final uniText = universityCtrl.text.trim();
+                            final majorText = majorCtrl.text.trim();
+                            selectedUniversity = _allUniversities.contains(uniText) ? uniText : null;
+                            selectedMajor = _majorsFor(degree).contains(majorText) ? majorText : null;
                             if (selectedUniversity == null || selectedMajor == null) {
                               _showSnack('لطفاً دانشگاه و رشته تحصیلی را از لیست انتخاب کنید.');
                               return;
@@ -1253,9 +1266,11 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                 child: Icon(icon, size: 18, color: accentColor),
               ),
               const SizedBox(width: 10),
-              Text(
+              Expanded(
+                child: Text(
                 title,
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+              ),
               ),
             ],
           ),
@@ -1373,9 +1388,11 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
           children: [
             Icon(Icons.save_outlined, color: Colors.white, size: 20),
             SizedBox(width: 8),
-            Text(
-              'ذخیره تغییرات پروفایل',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+            Flexible(
+              child: Text(
+                'ذخیره تغییرات پروفایل',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
             ),
           ],
         ),

@@ -69,6 +69,15 @@ class _RegistrationPageState extends State<RegistrationPage> {
     }
   }
 
+  /// Back to the login page: the one underneath if registration was opened from it, else a fresh one.
+  void _backToLogin() {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginPage()));
+    }
+  }
+
   void _previousStep() {
     if (_currentStep == 2 && !_isCompany) {
       _goToStep(0);
@@ -137,9 +146,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
             }
           }
         } else {
-          if (mounted) {
-            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginPage()));
-          }
+          if (mounted) _backToLogin();
         }
       } else {
         setState(() => _isLoading = false);
@@ -154,82 +161,94 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      body: Directionality(
-        textDirection: TextDirection.rtl,
-        child: ElegantBackground(
-          child: Center(
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 10.0),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 400),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 10),
-                    Center(
-                      child: Image.asset(
-                        'assets/Untitled_design-removebg-preview.png',
-                        height: 180,
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) => const Icon(Icons.school, size: 80, color: Color(0xFF0072FF)),
-                      ),
-                    ),
-                    const SizedBox(height: 5),
-
-                    RotatingGradientBorder(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(32),
+    // The phone/browser back button steps back through the form, then returns to login.
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_currentStep > 0) {
+          _previousStep();
+        } else {
+          _backToLogin();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF8FAFC),
+        body: Directionality(
+          textDirection: TextDirection.rtl,
+          child: ElegantBackground(
+            child: Center(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 10.0),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 400),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 10),
+                      Center(
+                        child: Image.asset(
+                          'assets/Untitled_design-removebg-preview.png',
+                          height: 180,
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) => const Icon(Icons.school, size: 80, color: Color(0xFF0072FF)),
                         ),
-                        child: AnimatedSize(
-                          duration: const Duration(milliseconds: 350),
-                          curve: Curves.easeInOut,
-                          child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 300),
-                            switchInCurve: Curves.easeInOut,
-                            switchOutCurve: Curves.easeInOut,
-                            transitionBuilder: (Widget child, Animation<double> animation) {
-                              return FadeTransition(
-                                opacity: animation,
-                                child: SlideTransition(
-                                  position: Tween<Offset>(
-                                    begin: const Offset(0.15, 0.0),
-                                    end: Offset.zero,
-                                  ).animate(animation),
-                                  child: child,
-                                ),
-                              );
-                            },
-                            child: _currentStep == 0
-                                ? _buildStep1(key: const ValueKey(0))
-                                : _currentStep == 1
-                                ? _buildStep2(key: const ValueKey(1))
-                                : _buildStep3(key: const ValueKey(2)),
+                      ),
+                      const SizedBox(height: 5),
+
+                      RotatingGradientBorder(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(32),
+                          ),
+                          child: AnimatedSize(
+                            duration: const Duration(milliseconds: 350),
+                            curve: Curves.easeInOut,
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 300),
+                              switchInCurve: Curves.easeInOut,
+                              switchOutCurve: Curves.easeInOut,
+                              transitionBuilder: (Widget child, Animation<double> animation) {
+                                return FadeTransition(
+                                  opacity: animation,
+                                  child: SlideTransition(
+                                    position: Tween<Offset>(
+                                      begin: const Offset(0.15, 0.0),
+                                      end: Offset.zero,
+                                    ).animate(animation),
+                                    child: child,
+                                  ),
+                                );
+                              },
+                              child: _currentStep == 0
+                                  ? _buildStep1(key: const ValueKey(0))
+                                  : _currentStep == 1
+                                  ? _buildStep2(key: const ValueKey(1))
+                                  : _buildStep3(key: const ValueKey(2)),
+                            ),
                           ),
                         ),
                       ),
-                    ),
 
-                    const SizedBox(height: 32),
+                      const SizedBox(height: 32),
 
-                    if (_currentStep == 0)
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           const Text('قبلاً عضو شده‌اید؟', style: TextStyle(color: Color(0xFF64748B))),
                           TextButton(
-                            onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginPage())),
+                            onPressed: _backToLogin,
                             child: const Text('وارد شوید', style: TextStyle(color: Color(0xFF0072FF), fontWeight: FontWeight.bold)),
                           ),
                         ],
                       ),
-                    const SizedBox(height: 10),
-                  ],
+                      const SizedBox(height: 10),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -247,10 +266,27 @@ class _RegistrationPageState extends State<RegistrationPage> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('ایجاد حساب جدید', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+          Row(
+            children: [
+              IconButton(
+                onPressed: _backToLogin,
+                tooltip: 'بازگشت به صفحه ورود',
+                icon: const Icon(Icons.arrow_back_rounded, size: 20),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text('ایجاد حساب جدید', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+              ),
+            ],
+          ),
           const SizedBox(height: 16),
 
-          Row(
+          // Wraps onto two lines on narrow phones instead of overflowing.
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
             children: [
               ChoiceChip(
                 label: const Text('دانشجو'),
@@ -260,7 +296,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
                 checkmarkColor: const Color(0xFF0072FF),
                 labelStyle: TextStyle(color: !_isCompany ? const Color(0xFF0072FF) : Colors.black54),
               ),
-              const SizedBox(width: 12),
               ChoiceChip(
                 label: const Text('شرکت / سازمان'),
                 selected: _isCompany,
@@ -306,7 +341,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                 constraints: const BoxConstraints(),
               ),
               const SizedBox(width: 8),
-              const Text('اطلاعات سازمانی', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+              const Expanded(child: Text('اطلاعات سازمانی', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)))),
             ],
           ),
           const SizedBox(height: 12),
@@ -362,7 +397,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                 constraints: const BoxConstraints(),
               ),
               const SizedBox(width: 8),
-              const Text('تعیین رمز عبور', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+              const Expanded(child: Text('تعیین رمز عبور', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)))),
             ],
           ),
           const SizedBox(height: 16),

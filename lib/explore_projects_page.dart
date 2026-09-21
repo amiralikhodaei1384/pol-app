@@ -47,7 +47,13 @@ class _ExploreProjectsPageState extends State<ExploreProjectsPage> {
         if (options['project_types'] != null) _typeOptions = ['همه', ...(options['project_types'] as List).cast<String>()];
         if (options['cities'] != null) _cityOptions = (options['cities'] as List).cast<String>();
         if (options['categories'] != null) _categoryOptions = (options['categories'] as List).cast<String>();
-        if (options['majors'] != null) _majorOptions = (options['majors'] as List).cast<String>();
+        // Projects target bachelor majors, so the filter offers those.
+        final bachelor = ApiService.majorsByDegree(options)['کارشناسی'];
+        if (bachelor != null) {
+          _majorOptions = bachelor;
+        } else if (options['majors'] != null) {
+          _majorOptions = (options['majors'] as List).cast<String>();
+        }
         if (options['universities'] != null) _universityOptions = (options['universities'] as List).cast<String>();
       });
     }

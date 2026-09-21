@@ -55,6 +55,25 @@ def calculate_profile_completion(profile) -> int:
     )
 
 
+# Placeholder the older sign-up flow stored before the student entered a real name.
+_PLACEHOLDER_NAMES = {"", "دانشجوی جدید"}
+
+
+def missing_required_profile_fields(profile) -> list:
+    """Required profile fields (the ones marked * in the forms) that are still empty.
+
+    Students can browse projects without them, but can't apply until the list is empty.
+    """
+    missing = []
+    full_name = (getattr(profile, "full_name", None) or "").strip()
+    if full_name in _PLACEHOLDER_NAMES or len(full_name.split()) < 2:
+        missing.append("نام و نام خانوادگی")
+    educations = [e for e in (getattr(profile, "educations", None) or []) if isinstance(e, dict)]
+    if not any(_has_value(e.get("university")) and _has_value(e.get("major")) and _has_value(e.get("gpa")) for e in educations):
+        missing.append("حداقل یک سابقه تحصیلی کامل (دانشگاه، رشته و معدل)")
+    return missing
+
+
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> models.User:
     """Return the authenticated user from the bearer token."""
     credentials_exception = HTTPException(
@@ -225,6 +244,8 @@ def get_me(current_user: models.User = Depends(get_current_user), db: Session = 
             "portfolio_links": p.portfolio_links,
             "completion_percentage": calculate_profile_completion(p),
             "accepted_projects": accepted_projects(db, current_user.id),
+            # Empty when the student may apply to projects.
+            "missing_required_fields": missing_required_profile_fields(p),
         }
     elif current_user.role == models.UserRole.COMPANY_REP and current_user.company_rep_profile:
         c = current_user.company_rep_profile.company

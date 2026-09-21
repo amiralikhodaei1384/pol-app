@@ -111,6 +111,16 @@ class ApiService {
     return null;
   }
 
+  /// {degree: majors offered at it} from a fetchOptions() result; empty if the server didn't send it.
+  static Map<String, List<String>> majorsByDegree(Map<String, dynamic>? options) {
+    final raw = options?['majors_by_degree'];
+    if (raw is! Map) return {};
+    return raw.map((degree, majors) => MapEntry(
+          degree.toString(),
+          majors is List ? majors.map((m) => m.toString()).toList() : <String>[],
+        ));
+  }
+
   static Future<Map<String, dynamic>?> fetchOptions() async {
     try {
       final res = await client.get(Uri.parse("$baseUrl/projects/options"));
@@ -320,23 +330,12 @@ class ApiService {
     return [];
   }
 
-  static Future<bool> applyForProject(String token, String projectId, {String? message}) async {
-    try {
-      final res = await client.post(
+  /// Null on success, otherwise the server's reason (e.g. which profile fields are missing).
+  static Future<String?> applyForProject(String token, String projectId, {String? message}) => _write(() => client.post(
         Uri.parse("$baseUrl/projects/$projectId/apply"),
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer $token",
-        },
+        headers: _auth(token, json: true),
         body: jsonEncode({"message": message}),
-      ).timeout(const Duration(seconds: 5));
-
-      return res.statusCode == 200 || res.statusCode == 201;
-    } catch (e) {
-      print("خطا در ثبت درخواست: $e");
-      return false;
-    }
-  }
+      ));
 
   static Future<List<dynamic>> fetchCompanyApplications(String token, {String? projectId}) async {
     try {
@@ -670,11 +669,21 @@ class ApiService {
   static Future<String?> deleteProjectAsAdmin(String token, String projectId) =>
       _write(() => client.delete(Uri.parse("$baseUrl/admin/projects/$projectId"), headers: _auth(token)));
 
-  static Future<String?> addOption(String token, String kind, String name) => _write(() => client.post(
-        Uri.parse("$baseUrl/admin/options/$kind"),
-        headers: _auth(token, json: true),
-        body: jsonEncode({"name": name}),
-      ));
+  /// [degrees] is only used for majors: the degrees it's offered at (empty = every degree).
+  /// [bachelorMajor]: for a major not offered at کارشناسی, the bachelor major it counts as in scoring.
+  static Future<String?> addOption(String token, String kind, String name, {List<String>? degrees, String? bachelorMajor}) =>
+      _write(() => client.post(
+            Uri.parse("$baseUrl/admin/options/$kind"),
+            headers: _auth(token, json: true),
+            body: jsonEncode({"name": name, "degrees": ?degrees, "bachelor_major": ?bachelorMajor}),
+          ));
+
+  static Future<String?> setMajorDegrees(String token, String majorId, List<String> degrees, {String? bachelorMajor}) =>
+      _write(() => client.patch(
+            Uri.parse("$baseUrl/admin/options/majors/$majorId"),
+            headers: _auth(token, json: true),
+            body: jsonEncode({"degrees": degrees, "bachelor_major": bachelorMajor}),
+          ));
 
   static Future<String?> deleteOption(String token, String kind, String optionId) =>
       _write(() => client.delete(Uri.parse("$baseUrl/admin/options/$kind/$optionId"), headers: _auth(token)));

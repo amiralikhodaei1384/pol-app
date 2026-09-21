@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pol_app/widgets/leave_wizard_dialog.dart';
 import 'package:pol_app/api_service.dart';
 import 'package:pol_app/dashboard_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -91,111 +92,139 @@ class _CompanyProfilePageState extends State<CompanyProfilePage> {
     }
   }
 
+  /// Wizard only: leave for the dashboard and complete the company info later from «پروفایل شرکت».
+  Future<void> _leaveWizard() async {
+    final leave = await confirmLeaveWizard(
+      context,
+      message: 'می‌توانید هر زمان از منوی پروفایل و گزینه «ویرایش پروفایل شرکت» اطلاعات شرکت را کامل کنید.',
+    );
+    if (!leave || !mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => const DashboardPage(isCompany: true)),
+      (route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
-        appBar: AppBar(
-          elevation: 0,
-          backgroundColor: Colors.white,
-          foregroundColor: const Color(0xFF1E293B),
-          title: Text(
-            widget.isWizard ? 'تکمیل اطلاعات اولیه شرکت' : 'پروفایل و معرفی شرکت',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          centerTitle: true,
-          leading: widget.isWizard
-              ? null
-              : IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, size: 18),
-            onPressed: () => Navigator.pop(context),
-          ),
-        ),
-        body: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: Color(0xFF1E6AFB)))
-            : SingleChildScrollView(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            children: [
-              _buildTopHeaderCard(),
-              const SizedBox(height: 20),
-
-              _buildSectionContainer(
-                title: 'مشخصات رسمی شرکت',
-                icon: Icons.business_rounded,
-                accentColor: const Color(0xFF1E6AFB),
-                children: [
-                  _buildMinimalField(
-                    label: 'نام رسمی شرکت یا سازمان *',
-                    controller: _nameController,
-                    hint: 'مثال: شرکت داده‌پردازان',
-                    icon: Icons.badge_outlined,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-
-              _buildSectionContainer(
-                title: 'معرفی و درباره شرکت',
-                icon: Icons.description_outlined,
-                accentColor: const Color(0xFF10B981),
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'درباره شرکت (معرفی، تاریخچه، زمینه فعالیت و فرهنگ سازمانی)',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
-                      ),
-                      const SizedBox(height: 6),
-                      TextFormField(
-                        controller: _aboutController,
-                        maxLines: 4,
-                        style: const TextStyle(fontSize: 12, color: Color(0xFF1E293B)),
-                        decoration: InputDecoration(
-                          hintText: 'توضیحات جامعی درباره حوزه فعالیت شرکت بنویسید تا دانشجویان بیشتر با شما آشنا شوند...',
-                          hintStyle: const TextStyle(fontSize: 11, color: Color(0xFFCBD5E1)),
-                          contentPadding: const EdgeInsets.all(12),
-                          filled: true,
-                          fillColor: const Color(0xFFF8FAFC),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF1E6AFB), width: 1.5)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-
-              _buildSectionContainer(
-                title: 'اطلاعات اینترنتی و آدرس',
-                icon: Icons.location_on_outlined,
-                accentColor: const Color(0xFF1E6AFB),
-                children: [
-                  _buildMinimalField(
-                    label: 'وب‌سایت رسمی شرکت',
-                    controller: _websiteController,
-                    hint: 'https://company.com',
-                    icon: Icons.language_rounded,
-                  ),
-                  const SizedBox(height: 14),
-                  _buildMinimalField(
-                    label: 'آدرس دفتر اصلی',
-                    controller: _addressController,
-                    hint: 'مثال: تهران، خیابان آزادی، پلاک ۱۲',
-                    icon: Icons.map_outlined,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 32),
-
-              _buildSaveButton(),
-              const SizedBox(height: 20),
+    // In the sign-up wizard there's nothing behind this page, so back offers to finish later.
+    return PopScope(
+      canPop: !widget.isWizard,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && widget.isWizard) _leaveWizard();
+      },
+      child: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          backgroundColor: const Color(0xFFF8FAFC),
+          appBar: AppBar(
+            elevation: 0,
+            backgroundColor: Colors.white,
+            foregroundColor: const Color(0xFF1E293B),
+            title: Text(
+              widget.isWizard ? 'تکمیل اطلاعات اولیه شرکت' : 'پروفایل و معرفی شرکت',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            centerTitle: true,
+            leading: widget.isWizard
+                ? null
+                : IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new, size: 18),
+              onPressed: () => Navigator.pop(context),
+            ),
+            actions: [
+              if (widget.isWizard)
+                TextButton(
+                  onPressed: _leaveWizard,
+                  child: const Text('بعداً تکمیل می‌کنم', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF1E6AFB))),
+                ),
             ],
+          ),
+          body: _isLoading
+              ? const Center(child: CircularProgressIndicator(color: Color(0xFF1E6AFB)))
+              : SingleChildScrollView(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              children: [
+                _buildTopHeaderCard(),
+                const SizedBox(height: 20),
+
+                _buildSectionContainer(
+                  title: 'مشخصات رسمی شرکت',
+                  icon: Icons.business_rounded,
+                  accentColor: const Color(0xFF1E6AFB),
+                  children: [
+                    _buildMinimalField(
+                      label: 'نام رسمی شرکت یا سازمان *',
+                      controller: _nameController,
+                      hint: 'مثال: شرکت داده‌پردازان',
+                      icon: Icons.badge_outlined,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+
+                _buildSectionContainer(
+                  title: 'معرفی و درباره شرکت',
+                  icon: Icons.description_outlined,
+                  accentColor: const Color(0xFF10B981),
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'درباره شرکت (معرفی، تاریخچه، زمینه فعالیت و فرهنگ سازمانی)',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+                        ),
+                        const SizedBox(height: 6),
+                        TextFormField(
+                          controller: _aboutController,
+                          maxLines: 4,
+                          style: const TextStyle(fontSize: 12, color: Color(0xFF1E293B)),
+                          decoration: InputDecoration(
+                            hintText: 'توضیحات جامعی درباره حوزه فعالیت شرکت بنویسید تا دانشجویان بیشتر با شما آشنا شوند...',
+                            hintStyle: const TextStyle(fontSize: 11, color: Color(0xFFCBD5E1)),
+                            contentPadding: const EdgeInsets.all(12),
+                            filled: true,
+                            fillColor: const Color(0xFFF8FAFC),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF1E6AFB), width: 1.5)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+
+                _buildSectionContainer(
+                  title: 'اطلاعات اینترنتی و آدرس',
+                  icon: Icons.location_on_outlined,
+                  accentColor: const Color(0xFF1E6AFB),
+                  children: [
+                    _buildMinimalField(
+                      label: 'وب‌سایت رسمی شرکت',
+                      controller: _websiteController,
+                      hint: 'https://company.com',
+                      icon: Icons.language_rounded,
+                    ),
+                    const SizedBox(height: 14),
+                    _buildMinimalField(
+                      label: 'آدرس دفتر اصلی',
+                      controller: _addressController,
+                      hint: 'مثال: تهران، خیابان آزادی، پلاک ۱۲',
+                      icon: Icons.map_outlined,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 32),
+
+                _buildSaveButton(),
+                const SizedBox(height: 20),
+              ],
+            ),
           ),
         ),
       ),

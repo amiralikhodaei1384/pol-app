@@ -82,6 +82,10 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   bool _loadingOptions = false;
   String _optionKind = 'universities';
   final _optionCtrl = TextEditingController();
+  // Majors only: which degree's majors are listed, and the degrees a new major is added with.
+  String _majorDegreeFilter = 'all';
+  final Set<String> _newMajorDegrees = {};
+  String? _newMajorBachelor;
 
   // اعلان همگانی
   String _audience = 'all';
@@ -1115,9 +1119,62 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
   // ---------------- اطلاعات پایه ----------------
 
+  static const _degreeOrder = ['کاردانی', 'کارشناسی', 'کارشناسی ارشد', 'دکتری'];
+
+  /// Degree names from the degrees list, in study order (known degrees first).
+  List<String> get _degreeNames {
+    final names = ((_options['degrees'] as List?) ?? []).map((d) => d['name'].toString()).toList();
+    int rank(String d) => _degreeOrder.contains(d) ? _degreeOrder.indexOf(d) : _degreeOrder.length;
+    return names..sort((a, b) => rank(a).compareTo(rank(b)));
+  }
+
+  List<String> _degreesOf(dynamic major) => ((major['degrees'] as List?) ?? []).map((d) => d.toString()).toList();
+
+  /// Majors not offered at کارشناسی need the bachelor major they count as in match scoring.
+  bool _needsBachelorMajor(Iterable<String> degrees) => degrees.isNotEmpty && !degrees.contains('کارشناسی');
+
+  /// Majors offered at کارشناسی (including every-degree ones), except [excluding].
+  List<String> _bachelorMajorNames({String? excluding}) => ((_options['majors'] as List?) ?? [])
+      .where((m) => _majorOffersDegree(m, 'کارشناسی') && m['name'] != excluding)
+      .map((m) => m['name'].toString())
+      .toList();
+
+  Widget _bachelorMajorPicker({required String? value, required ValueChanged<String?> onChanged, String? excluding}) {
+    final options = _bachelorMajorNames(excluding: excluding);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('رشته کارشناسی مرتبط (برای امتیازدهی) *', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
+        const SizedBox(height: 6),
+        DropdownButtonFormField<String>(
+          initialValue: options.contains(value) ? value : null,
+          isExpanded: true,
+          decoration: _inputDecoration('انتخاب رشته کارشناسی'),
+          items: options.map((m) => DropdownMenuItem(value: m, child: Text(m, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)))).toList(),
+          onChanged: onChanged,
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'امتیاز تطابق فقط بر اساس رشته کارشناسی حساب می‌شود؛ دانشجوی این رشته هم‌ارز این رشته کارشناسی در نظر گرفته می‌شود.',
+          style: TextStyle(fontSize: 10, color: _inkFaint, height: 1.5),
+        ),
+      ],
+    );
+  }
+
+  /// A major with no degrees set is offered at every degree.
+  bool _majorOffersDegree(dynamic major, String degree) {
+    final degrees = _degreesOf(major);
+    return degrees.isEmpty || degrees.contains(degree);
+  }
+
   Widget _buildOptions() {
     if (_loadingOptions && _options.isEmpty) return _loading();
-    final items = ((_options[_optionKind] as List?) ?? []);
+    final isMajors = _optionKind == 'majors';
+    final allItems = ((_options[_optionKind] as List?) ?? []);
+    final items = isMajors && _majorDegreeFilter != 'all'
+        ? allItems.where((m) => _majorOffersDegree(m, _majorDegreeFilter)).toList()
+        : allItems;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1133,6 +1190,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                 setState(() {
                   _optionKind = k.key;
                   _optionCtrl.clear();
+                  _majorDegreeFilter = 'all';
+                  _newMajorDegrees.clear();
+                  _newMajorBachelor = null;
                 });
               });
             }).toList(),
@@ -1149,6 +1209,27 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                 'این فهرست‌ها در فرم‌های پروفایل و ثبت پروژه نمایش داده می‌شوند. حذف یک گزینه اطلاعات ثبت‌شده قبلی را تغییر نمی‌دهد.',
                 style: TextStyle(fontSize: 10.5, color: _inkMuted, height: 1.6),
               ),
+              if (isMajors) ...[
+                const SizedBox(height: 14),
+                const Text('مقاطع رشته جدید', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _degreeNames.map((d) => _filterChip(d, _newMajorDegrees.contains(d), () {
+                        setState(() => _newMajorDegrees.contains(d) ? _newMajorDegrees.remove(d) : _newMajorDegrees.add(d));
+                      })).toList(),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _newMajorDegrees.isEmpty ? 'هیچ مقطعی انتخاب نشده؛ رشته در همه مقاطع نمایش داده می‌شود.' : 'فقط در مقاطع انتخاب‌شده نمایش داده می‌شود.',
+                  style: const TextStyle(fontSize: 10, color: _inkFaint),
+                ),
+                if (_needsBachelorMajor(_newMajorDegrees)) ...[
+                  const SizedBox(height: 12),
+                  _bachelorMajorPicker(value: _newMajorBachelor, onChanged: (v) => setState(() => _newMajorBachelor = v)),
+                ],
+              ],
               const SizedBox(height: 14),
               Row(
                 children: [
@@ -1175,6 +1256,28 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                 ],
               ),
               const SizedBox(height: 16),
+              if (isMajors) ...[
+                const Divider(height: 1, color: _line),
+                const SizedBox(height: 12),
+                const Text('نمایش رشته‌های مقطع', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _filterChip('همه (${_fa(allItems.length)})', _majorDegreeFilter == 'all', () => setState(() => _majorDegreeFilter = 'all')),
+                    for (final d in _degreeNames)
+                      _filterChip(
+                        '$d (${_fa(allItems.where((m) => _majorOffersDegree(m, d)).length)})',
+                        _majorDegreeFilter == d,
+                        () => setState(() => _majorDegreeFilter = d),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                const Text('برای تغییر مقاطع یک رشته روی آن بزنید.', style: TextStyle(fontSize: 10, color: _inkFaint)),
+                const SizedBox(height: 12),
+              ],
               if (items.isEmpty)
                 const Text('این فهرست خالی است.', style: TextStyle(fontSize: 11, color: _inkMuted))
               else
@@ -1183,11 +1286,12 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   runSpacing: 8,
                   children: items.map<Widget>((o) {
                     final busy = _busy.contains(o['id'].toString());
-                    return Container(
+                    final degrees = isMajors ? _degreesOf(o) : const <String>[];
+                    final chip = Container(
                       padding: const EdgeInsetsDirectional.only(start: 12, end: 4, top: 4, bottom: 4),
                       decoration: BoxDecoration(
                         color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(999),
+                        borderRadius: BorderRadius.circular(isMajors ? 14 : 999),
                         border: Border.all(color: _line),
                       ),
                       child: Row(
@@ -1195,11 +1299,27 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                         children: [
                           // Long names (e.g. full university names) wrap instead of overflowing on phones.
                           Flexible(
-                            child: Text(
-                              o['name'] ?? '',
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 11.5, color: _ink),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  o['name'] ?? '',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 11.5, color: _ink),
+                                ),
+                                if (isMajors)
+                                  Text(
+                                    [
+                                      degrees.isEmpty ? 'همه مقاطع' : degrees.join('، '),
+                                      if ((o['bachelor_major'] ?? '').toString().isNotEmpty) 'کارشناسی: ${o['bachelor_major']}',
+                                    ].join('  ·  '),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 9.5, color: _brand, fontWeight: FontWeight.w600),
+                                  ),
+                              ],
                             ),
                           ),
                           const SizedBox(width: 2),
@@ -1219,6 +1339,15 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                         ],
                       ),
                     );
+                    if (!isMajors) return chip;
+                    return Tooltip(
+                      message: 'تغییر مقاطع این رشته',
+                      child: InkWell(
+                        onTap: busy ? null : () => _editMajorDegrees(o),
+                        borderRadius: BorderRadius.circular(14),
+                        child: chip,
+                      ),
+                    );
                   }).toList(),
                 ),
             ],
@@ -1231,10 +1360,100 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   Future<void> _addOption() async {
     final name = _optionCtrl.text.trim();
     if (name.isEmpty) return;
-    final done = await _runRowAction('option-add', () => ApiService.addOption(_token, _optionKind, name), '«$name» اضافه شد.');
+    final degrees = _optionKind == 'majors' ? _degreeNames.where(_newMajorDegrees.contains).toList() : null;
+    final bachelor = degrees != null && _needsBachelorMajor(degrees) ? _newMajorBachelor : null;
+    if (degrees != null && _needsBachelorMajor(degrees) && bachelor == null) {
+      _toast('رشته کارشناسی مرتبط را انتخاب کنید.', error: true);
+      return;
+    }
+    final done = await _runRowAction(
+      'option-add',
+      () => ApiService.addOption(_token, _optionKind, name, degrees: degrees, bachelorMajor: bachelor),
+      '«$name» اضافه شد.',
+    );
     if (done) {
       _optionCtrl.clear();
+      setState(() => _newMajorBachelor = null);
       await _loadOptions();
+    }
+  }
+
+  Future<void> _editMajorDegrees(dynamic major) async {
+    final chosen = _degreesOf(major).toSet();
+    String? bachelor = major['bachelor_major']?.toString();
+    final result = await showDialog<(List<String>, String?)>(
+      context: context,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            title: Text('مقاطع «${major['name']}»', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _ink)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final d in _degreeNames)
+                  CheckboxListTile(
+                    value: chosen.contains(d),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    activeColor: _brand,
+                    title: Text(d, style: const TextStyle(fontSize: 12.5)),
+                    onChanged: (v) => setDialogState(() => v == true ? chosen.add(d) : chosen.remove(d)),
+                  ),
+                const SizedBox(height: 4),
+                Text(
+                  chosen.isEmpty ? 'هیچ مقطعی انتخاب نشده؛ رشته در همه مقاطع نمایش داده می‌شود.' : 'دانشجویان این رشته را فقط در مقاطع انتخاب‌شده می‌بینند.',
+                  style: const TextStyle(fontSize: 10.5, color: _inkMuted),
+                ),
+                if (_needsBachelorMajor(chosen)) ...[
+                  const SizedBox(height: 14),
+                  _bachelorMajorPicker(
+                    value: bachelor,
+                    excluding: major['name']?.toString(),
+                    onChanged: (v) => setDialogState(() => bachelor = v),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text('انصراف', style: TextStyle(color: _inkMuted))),
+              ElevatedButton(
+                onPressed: () {
+                  if (_needsBachelorMajor(chosen) && (bachelor == null || bachelor!.isEmpty)) {
+                    ScaffoldMessenger.of(this.context).showSnackBar(
+                      const SnackBar(content: Text('رشته کارشناسی مرتبط را انتخاب کنید.'), backgroundColor: _danger),
+                    );
+                    return;
+                  }
+                  Navigator.pop(context, (_degreeNames.where(chosen.contains).toList(), _needsBachelorMajor(chosen) ? bachelor : null));
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _brand,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: const Text('ذخیره', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (result == null || !mounted) return;
+    final (degrees, bachelorMajor) = result;
+    final id = major['id'].toString();
+    final done = await _runRowAction(
+      id,
+      () => ApiService.setMajorDegrees(_token, id, degrees, bachelorMajor: bachelorMajor),
+      'مقاطع «${major['name']}» ذخیره شد.',
+    );
+    if (done && mounted) {
+      setState(() {
+        major['degrees'] = degrees;
+        major['bachelor_major'] = bachelorMajor;
+      });
     }
   }
 
