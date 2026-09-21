@@ -128,10 +128,18 @@ def seed_options(db):
 if __name__ == "__main__":
     # Creates only tables that don't exist yet (e.g. options_project_types); nothing is dropped.
     Base.metadata.create_all(bind=engine)
-    # create_all never adds columns to existing tables; add the per-degree majors column if missing.
+    # create_all never adds columns to existing tables, so bring an older database up to date
+    # here. Every statement is idempotent: running this again changes nothing.
     with engine.begin() as conn:
-        conn.exec_driver_sql("ALTER TABLE options_majors ADD COLUMN IF NOT EXISTS degrees JSON")
-        conn.exec_driver_sql("ALTER TABLE options_majors ADD COLUMN IF NOT EXISTS bachelor_major VARCHAR")
+        for statement in [
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE",
+            "ALTER TABLE applications ADD COLUMN IF NOT EXISTS decision_note TEXT",
+            "ALTER TABLE applications ADD COLUMN IF NOT EXISTS decided_at TIMESTAMPTZ",
+            "ALTER TABLE options_majors ADD COLUMN IF NOT EXISTS degrees JSON",
+            "ALTER TABLE options_majors ADD COLUMN IF NOT EXISTS bachelor_major VARCHAR",
+            "ALTER TABLE chat_threads ADD COLUMN IF NOT EXISTS admin_id UUID REFERENCES users(id)",
+        ]:
+            conn.exec_driver_sql(statement)
     db = SessionLocal()
     try:
         seed_options(db)

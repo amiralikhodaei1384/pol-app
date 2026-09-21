@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:pol_app/admin_dashboard_page.dart';
 import 'package:pol_app/api_service.dart';
+import 'package:pol_app/notification_poller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // Renders every admin section at phone, tablet and desktop sizes with realistic data.
@@ -127,6 +128,8 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text(section.value), findsOneWidget, reason: '${section.key} did not open');
       }
+      // The panel polls for unread chats; stop it so no timer outlives the test.
+      NotificationPoller.instance.stop();
     });
   }
 }

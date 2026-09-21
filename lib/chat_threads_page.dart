@@ -16,6 +16,8 @@ class ChatThreadsPage extends StatefulWidget {
 class _ChatThreadsPageState extends State<ChatThreadsPage> {
   List<dynamic> _threads = [];
   bool _isLoading = true;
+  bool _loadFailed = false;
+  bool _isAdmin = false;
   Timer? _pollingTimer;
 
   @override
@@ -35,12 +37,15 @@ class _ChatThreadsPageState extends State<ChatThreadsPage> {
     if (!silent) setState(() => _isLoading = true);
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token') ?? '';
+    _isAdmin = prefs.getBool('is_admin') ?? false;
 
     final list = await ApiService.fetchChatThreads(token);
 
     if (mounted) {
       setState(() {
-        _threads = list;
+        // A failed background refresh keeps the conversations already on screen.
+        if (list != null) _threads = list;
+        _loadFailed = list == null && (_threads.isEmpty || !silent);
         _isLoading = false;
       });
     }
@@ -67,9 +72,30 @@ class _ChatThreadsPageState extends State<ChatThreadsPage> {
         ),
         body: _isLoading
             ? const Center(child: CircularProgressIndicator(color: Color(0xFF1E6AFB)))
+            : _loadFailed && _threads.isEmpty
+            ? Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.cloud_off_rounded, size: 36, color: Colors.grey),
+              const SizedBox(height: 8),
+              const Text('دریافت گفتگوها ممکن نشد.', style: TextStyle(color: Colors.grey, fontSize: 12)),
+              TextButton.icon(onPressed: _loadThreads, icon: const Icon(Icons.refresh), label: const Text('تلاش دوباره')),
+            ],
+          ),
+        )
             : _threads.isEmpty
-            ? const Center(
-          child: Text('هنوز هیچ گفتگویی فعال نشده است.\n(چت‌ها پس از اقدام کارفرما فعال می‌شوند)', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey, fontSize: 12, height: 1.5)),
+            ? Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text(
+              _isAdmin
+                  ? 'هنوز هیچ گفتگویی ندارید.\nبرای شروع، در «مدیریت کاربران» روی «گفتگو» یا «ارسال پیام» یک دانشجو یا شرکت بزنید.'
+                  : 'هنوز هیچ گفتگویی ندارید.\nگفتگوها وقتی شروع می‌شوند که کارفرما یا مدیر سامانه برای شما پیام بفرستد.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.grey, fontSize: 12, height: 1.6),
+            ),
+          ),
         )
             : RefreshIndicator(
           onRefresh: _loadThreads,

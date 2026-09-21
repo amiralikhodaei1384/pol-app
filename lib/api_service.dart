@@ -396,7 +396,8 @@ class ApiService {
     return null;
   }
 
-  static Future<List<dynamic>> fetchChatThreads(String token) async {
+  /// The user's conversations, or null when they couldn't be loaded (so it isn't shown as "none").
+  static Future<List<dynamic>?> fetchChatThreads(String token) async {
     try {
       final res = await client.get(
         Uri.parse("$baseUrl/projects/chat/threads"),
@@ -404,12 +405,12 @@ class ApiService {
       ).timeout(const Duration(seconds: 5));
 
       if (res.statusCode == 200) {
-        return jsonDecode(res.body);
+        return jsonDecode(utf8.decode(res.bodyBytes));
       }
     } catch (e) {
       print("خطا در دریافت لیست چت‌ها: $e");
     }
-    return [];
+    return null;
   }
 
   static Future<List<dynamic>> fetchMessages(String token, String threadId) async {
@@ -650,6 +651,33 @@ class ApiService {
         headers: _auth(token, json: true),
         body: jsonEncode({"decision": decision, "note": note}),
       ));
+
+  /// Opens (or reopens) the admin's chat with a student or company; returns its thread id.
+  static Future<String?> adminStartChat(String token, String userId) async {
+    try {
+      final res = await client.post(Uri.parse("$baseUrl/admin/users/$userId/chat"), headers: _auth(token)).timeout(const Duration(seconds: 8));
+      if (res.statusCode == 200) return jsonDecode(utf8.decode(res.bodyBytes))['thread_id']?.toString();
+    } catch (e) {
+      print("خطا در شروع گفتگو: $e");
+    }
+    return null;
+  }
+
+  /// Sends a student or company a message in the admin's chat with them (created if needed).
+  /// Returns (thread id, null) on success, or (null, error message).
+  static Future<(String?, String?)> adminMessageUser(String token, String userId, String text) async {
+    try {
+      final res = await client.post(
+        Uri.parse("$baseUrl/admin/users/$userId/message"),
+        headers: _auth(token, json: true),
+        body: jsonEncode({"text": text}),
+      ).timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200) return (jsonDecode(utf8.decode(res.bodyBytes))['thread_id']?.toString(), null);
+      return (null, _detailOf(res) ?? 'ارسال پیام ناموفق بود (${res.statusCode}).');
+    } catch (e) {
+      return (null, 'ارتباط با سرور برقرار نشد.');
+    }
+  }
 
   static Future<String?> setUserActive(String token, String userId, bool isActive) => _write(() => client.patch(
         Uri.parse("$baseUrl/admin/users/$userId/status"),

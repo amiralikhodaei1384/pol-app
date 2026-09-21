@@ -2,7 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:pol_app/api_service.dart';
+import 'package:pol_app/chat_page.dart';
+import 'package:pol_app/chat_threads_page.dart';
 import 'package:pol_app/login_page.dart';
+import 'package:pol_app/notification_poller.dart';
 import 'package:pol_app/widgets/profile_menu_button.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -103,8 +106,16 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     _init();
   }
 
+  // Unread chat messages from students and companies, for the «پیام‌ها» badge.
+  int _unreadChats = 0;
+
+  void _onCountsChanged() {
+    if (mounted) setState(() => _unreadChats = NotificationPoller.instance.unreadChats);
+  }
+
   @override
   void dispose() {
+    NotificationPoller.instance.removeListener(_onCountsChanged);
     _searchDebounce?.cancel();
     _userSearch.dispose();
     _projectSearch.dispose();
@@ -115,6 +126,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   }
 
   Future<void> _init() async {
+    NotificationPoller.instance.addListener(_onCountsChanged);
+    NotificationPoller.instance.start();
     final prefs = await SharedPreferences.getInstance();
     _token = prefs.getString('access_token') ?? '';
     final me = await ApiService.getMe(_token);
@@ -173,6 +186,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   }
 
   Future<void> _logout() async {
+    NotificationPoller.instance.stop();
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
     if (mounted) {
@@ -510,6 +524,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                 _navItem(Icons.work_outline_rounded, 'مدیریت پروژه‌ها', _Section.projects),
                 _navItem(Icons.tune_rounded, 'اطلاعات پایه', _Section.options),
                 _navItem(Icons.campaign_outlined, 'ارسال اعلان همگانی', _Section.broadcast),
+                _navTile(Icons.chat_bubble_outline_rounded, 'پیام‌ها و گفتگوها', badge: _unreadChats, onTap: _openChats),
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                   child: Divider(color: Colors.white24, height: 1),
@@ -527,7 +542,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     return _navTile(icon, title, isActive: _section == section, onTap: () => _select(section));
   }
 
-  Widget _navTile(IconData icon, String title, {bool isActive = false, required VoidCallback onTap}) {
+  Widget _navTile(IconData icon, String title, {bool isActive = false, int badge = 0, required VoidCallback onTap}) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
       decoration: BoxDecoration(
@@ -537,6 +552,13 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       child: ListTile(
         leading: Icon(icon, color: Colors.white, size: 20),
         title: Text(title, style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: isActive ? FontWeight.bold : FontWeight.normal)),
+        trailing: badge > 0
+            ? Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(color: const Color(0xFF00E676), borderRadius: BorderRadius.circular(10)),
+                child: Text(_fa(badge), style: const TextStyle(fontSize: 10, color: Colors.black, fontWeight: FontWeight.bold)),
+              )
+            : null,
         dense: true,
         onTap: onTap,
       ),
@@ -826,16 +848,18 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         ? _pill('حساب مدیر', icon: Icons.lock_outline_rounded)
         : busy
             ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: _brand))
-            : Row(
-                mainAxisSize: MainAxisSize.min,
+            : Wrap(
+                spacing: 6,
+                runSpacing: 6,
                 children: [
+                  _actionButton(icon: Icons.chat_bubble_outline_rounded, label: 'گفتگو', color: _brand, onTap: () => _chatWithUser(u)),
+                  _actionButton(icon: Icons.mark_email_unread_outlined, label: 'ارسال پیام', color: const Color(0xFF7C3AED), onTap: () => _messageUser(u)),
                   _actionButton(
                     icon: isActive ? Icons.block_rounded : Icons.lock_open_rounded,
                     label: isActive ? 'مسدود کردن' : 'رفع مسدودیت',
                     color: isActive ? const Color(0xFFB45309) : _success,
                     onTap: () => _toggleUser(u),
                   ),
-                  const SizedBox(width: 6),
                   _actionButton(icon: Icons.delete_outline_rounded, label: 'حذف', color: _danger, onTap: () => _deleteUser(u)),
                 ],
               );
@@ -913,6 +937,56 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _openChats() async {
+    if (_scaffoldKey.currentState?.isDrawerOpen ?? false) Navigator.pop(context);
+    await Navigator.push(context, MaterialPageRoute(builder: (context) => const ChatThreadsPage()));
+    NotificationPoller.instance.refresh();
+  }
+
+  /// Opens the admin's chat with this student or company, creating it the first time.
+  Future<void> _chatWithUser(dynamic u) async {
+    final id = u['id'].toString();
+    setState(() => _busy.add(id));
+    final threadId = await ApiService.adminStartChat(_token, id);
+    if (!mounted) return;
+    setState(() => _busy.remove(id));
+    if (threadId == null) {
+      _toast('شروع گفتگو ممکن نشد.', error: true);
+      return;
+    }
+    await Navigator.push(context, MaterialPageRoute(builder: (context) => ChatPage(threadId: threadId)));
+    NotificationPoller.instance.refresh();
+  }
+
+  /// Sends this user a message in the admin's chat with them (starting it if needed).
+  Future<void> _messageUser(dynamic u) async {
+    final who = (u['name'] ?? '').toString().isNotEmpty ? u['name'] : u['email'];
+    final text = await showDialog<String>(
+      context: context,
+      builder: (context) => _DirectMessageDialog(recipient: who.toString(), inputDecoration: _inputDecoration),
+    );
+    if (text == null || !mounted) return;
+
+    final id = u['id'].toString();
+    setState(() => _busy.add(id));
+    final (threadId, error) = await ApiService.adminMessageUser(_token, id, text);
+    if (!mounted) return;
+    setState(() => _busy.remove(id));
+    if (error != null || threadId == null) {
+      _toast(error ?? 'ارسال پیام ناموفق بود.', error: true);
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('پیام در گفتگو با «$who» ارسال شد.'),
+      backgroundColor: _success,
+      action: SnackBarAction(
+        label: 'مشاهده گفتگو',
+        textColor: Colors.white,
+        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => ChatPage(threadId: threadId))),
+      ),
+    ));
   }
 
   Future<void> _toggleUser(dynamic u) async {
@@ -1739,6 +1813,97 @@ class _ApplicationStatusBars extends StatelessWidget {
           );
         }),
       ],
+    );
+  }
+}
+
+/// The message for one user's chat; pops the trimmed text, or null when cancelled.
+class _DirectMessageDialog extends StatefulWidget {
+  final String recipient;
+  final InputDecoration Function(String hint) inputDecoration;
+
+  const _DirectMessageDialog({required this.recipient, required this.inputDecoration});
+
+  @override
+  State<_DirectMessageDialog> createState() => _DirectMessageDialogState();
+}
+
+class _DirectMessageDialogState extends State<_DirectMessageDialog> {
+  final _message = TextEditingController();
+  String? _error;
+
+  @override
+  void dispose() {
+    _message.dispose();
+    super.dispose();
+  }
+
+  void _send() {
+    final text = _message.text.trim();
+    if (text.isEmpty) {
+      setState(() => _error = 'متن پیام را وارد کنید.');
+      return;
+    }
+    Navigator.pop(context, text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Row(
+          children: [
+            const Icon(Icons.mark_email_unread_outlined, color: Color(0xFF7C3AED)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text('ارسال پیام به «${widget.recipient}»', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _ink)),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'پیام در گفتگوی شما با این کاربر ارسال می‌شود (اگر گفتگویی نباشد، شروع می‌شود). کاربر اعلان می‌گیرد و می‌تواند در «پیام‌ها» پاسخ دهد.',
+                  style: TextStyle(fontSize: 11, color: _inkMuted, height: 1.6),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: _message,
+                  autofocus: true,
+                  minLines: 3,
+                  maxLines: 6,
+                  style: const TextStyle(fontSize: 12, height: 1.6),
+                  decoration: widget.inputDecoration('متن پیام...'),
+                ),
+                if (_error != null) ...[
+                  const SizedBox(height: 8),
+                  Text(_error!, style: const TextStyle(fontSize: 11, color: _danger)),
+                ],
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('انصراف', style: TextStyle(color: _inkMuted))),
+          ElevatedButton.icon(
+            onPressed: _send,
+            icon: const Icon(Icons.send_rounded, size: 16),
+            label: const Text('ارسال', style: TextStyle(fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF7C3AED),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

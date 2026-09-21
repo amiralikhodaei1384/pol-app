@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from ..db.session import get_db
 from ..models import models
 from .auth import get_current_admin
-from .projects import send_notification, to_shamsi
+from .projects import send_notification, to_shamsi, display_name, post_chat_message
 
 router = APIRouter()
 
@@ -42,6 +42,10 @@ class OptionIn(BaseModel):
 class MajorDegreesIn(BaseModel):
     degrees: List[str] = []
     bachelor_major: Optional[str] = None
+
+
+class ChatMessageIn(BaseModel):
+    text: str = Field(..., min_length=1, max_length=4000)
 
 
 class BroadcastIn(BaseModel):
@@ -262,7 +266,11 @@ def delete_user(user_id: str, db: Session = Depends(get_db), admin: models.User 
     _delete_applications(db, app_ids)
     thread_ids = [
         t.id for t in db.query(models.ChatThread.id).filter(
-            or_(models.ChatThread.student_id == user.id, models.ChatThread.employer_id == user.id)
+            or_(
+                models.ChatThread.student_id == user.id,
+                models.ChatThread.employer_id == user.id,
+                models.ChatThread.admin_id == user.id,
+            )
         )
     ]
     _delete_threads(db, thread_ids)
@@ -287,6 +295,50 @@ def delete_user(user_id: str, db: Session = Depends(get_db), admin: models.User 
     db.delete(user)
     db.commit()
     return {"message": "کاربر و تمام اطلاعات وابسته به او حذف شد."}
+
+
+def _admin_thread(db: Session, admin: models.User, user: models.User) -> models.ChatThread:
+    """This admin's chat with the user, created (and committed) the first time."""
+    side = models.ChatThread.student_id if user.role == models.UserRole.STUDENT else models.ChatThread.employer_id
+    thread = db.query(models.ChatThread).filter(
+        models.ChatThread.admin_id == admin.id,
+        models.ChatThread.application_id.is_(None),
+        side == user.id,
+    ).first()
+    if thread is None:
+        thread = models.ChatThread(admin_id=admin.id)
+        if user.role == models.UserRole.STUDENT:
+            thread.student_id = user.id
+        else:
+            thread.employer_id = user.id
+        db.add(thread)
+        db.commit()
+        db.refresh(thread)
+    return thread
+
+
+@router.post("/users/{user_id}/chat")
+def start_chat_with_user(user_id: str, db: Session = Depends(get_db), admin: models.User = Depends(get_current_admin)):
+    """Opens this admin's chat with a student or company, creating it the first time."""
+    user = _managed_user(db, user_id, admin)
+    thread = _admin_thread(db, admin, user)
+    return {"thread_id": str(thread.id), "other_party": display_name(user)}
+
+
+@router.post("/users/{user_id}/message")
+def message_user(user_id: str, body: ChatMessageIn, db: Session = Depends(get_db), admin: models.User = Depends(get_current_admin)):
+    """Sends a student or company a message in the admin's chat with them (starting it if needed).
+
+    The recipient gets the usual chat notification and can reply in «پیام‌ها».
+    """
+    user = _managed_user(db, user_id, admin)
+    text = body.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="متن پیام نمی‌تواند خالی باشد.")
+    thread = _admin_thread(db, admin, user)
+    post_chat_message(db, thread, admin, text)
+    db.commit()
+    return {"thread_id": str(thread.id), "other_party": display_name(user), "message": f"پیام در گفتگو با {display_name(user)} ارسال شد."}
 
 
 # ---------- projects ----------

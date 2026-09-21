@@ -144,9 +144,12 @@ class ChatThread(Base):
     __tablename__ = "chat_threads"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Set for employer <-> student chats about an application; empty for admin chats.
     application_id = Column(UUID(as_uuid=True), ForeignKey("applications.id"), unique=True)
     employer_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     student_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    # Admin chats: the admin, plus either student_id or employer_id for the other side.
+    admin_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class ChatMessage(Base):

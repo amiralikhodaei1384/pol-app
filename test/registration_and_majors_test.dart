@@ -273,6 +273,7 @@ void main() {
       {'path': '/admin/options/majors/m1', 'degrees': ['کاردانی', 'کارشناسی'], 'bachelor_major': null}
     ]);
     expect(find.text('کاردانی، کارشناسی'), findsOneWidget, reason: 'chip updates without reloading');
+    NotificationPoller.instance.stop(); // the admin panel polls for unread chats
   });
 
   group('sign-up wizards can be left and finished later', () {
@@ -395,5 +396,6 @@ void main() {
     expect(posts, [
       {'name': 'مهندسی کامپیوتر - بازی‌سازی', 'degrees': ['دکتری'], 'bachelor_major': _bachelor}
     ]);
+    NotificationPoller.instance.stop();
   });
 }

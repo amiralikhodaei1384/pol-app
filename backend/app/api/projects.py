@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, object_session
 from typing import List, Optional
 from datetime import datetime, timezone
@@ -583,24 +584,60 @@ def start_chat(app_id: str, db: Session = Depends(get_db), current_user: models.
     db.refresh(new_thread)
     return {"thread_id": str(new_thread.id)}
 
+def thread_participants(thread: models.ChatThread) -> set:
+    return {uid for uid in (thread.student_id, thread.employer_id, thread.admin_id) if uid}
+
+
+def _member_thread(db: Session, thread_id, user: models.User) -> models.ChatThread:
+    """The thread, only if the user takes part in it; anything else looks like it doesn't exist."""
+    try:
+        t_uuid = uuid.UUID(str(thread_id))
+    except ValueError:
+        raise HTTPException(status_code=404, detail="گفتگو یافت نشد.")
+    thread = db.query(models.ChatThread).filter(models.ChatThread.id == t_uuid).first()
+    if not thread or user.id not in thread_participants(thread):
+        raise HTTPException(status_code=404, detail="گفتگو یافت نشد.")
+    return thread
+
+
+def display_name(user: Optional[models.User]) -> str:
+    """How a chat participant is named to the other side."""
+    if user is None:
+        return "کاربر"
+    if user.role == models.UserRole.ADMIN:
+        return "مدیر سامانه"
+    if user.role == models.UserRole.STUDENT:
+        return (user.student_profile.full_name if user.student_profile else "") or "دانشجو"
+    rep = user.company_rep_profile
+    return (rep.company.name if (rep and rep.company) else "") or "کارفرما"
+
+
 @router.get("/chat/threads")
 def get_chat_threads(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    threads = db.query(models.ChatThread).filter(models.ChatThread.student_id == current_user.id).all() if current_user.role == models.UserRole.STUDENT else db.query(models.ChatThread).filter(models.ChatThread.employer_id == current_user.id).all()
+    threads = db.query(models.ChatThread).filter(or_(
+        models.ChatThread.student_id == current_user.id,
+        models.ChatThread.employer_id == current_user.id,
+        models.ChatThread.admin_id == current_user.id,
+    )).order_by(models.ChatThread.created_at.desc()).all()
     res = []
     for t in threads:
-        app_obj = db.query(models.Application).filter(models.Application.id == t.application_id).first()
-        other_name = "کارفرما"
-        if current_user.role == models.UserRole.COMPANY_REP and app_obj and app_obj.student and app_obj.student.student_profile:
-            other_name = app_obj.student.student_profile.full_name or "دانشجو"
-        res.append({"thread_id": str(t.id), "title": app_obj.project.title if (app_obj and app_obj.project) else "گفتگو", "other_party": other_name})
+        if t.admin_id:
+            if t.admin_id == current_user.id:
+                other = db.query(models.User).filter(models.User.id == (t.student_id or t.employer_id)).first()
+                title, other_name = f"گفتگو با {display_name(other)}", display_name(other)
+            else:
+                title, other_name = "گفتگو با مدیر سامانه", "مدیر سامانه"
+        else:
+            app_obj = db.query(models.Application).filter(models.Application.id == t.application_id).first()
+            other_id = t.student_id if current_user.id == t.employer_id else t.employer_id
+            other_name = display_name(db.query(models.User).filter(models.User.id == other_id).first())
+            title = app_obj.project.title if (app_obj and app_obj.project) else "گفتگو"
+        res.append({"thread_id": str(t.id), "title": title, "other_party": other_name, "is_admin_chat": t.admin_id is not None})
     return res
 
 @router.get("/chat/messages/{thread_id}")
 def get_messages(thread_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    try:
-        t_uuid = uuid.UUID(thread_id)
-    except ValueError:
-        t_uuid = thread_id
+    t_uuid = _member_thread(db, thread_id, current_user).id
 
     unread_msgs = db.query(models.ChatMessage).filter(
         models.ChatMessage.thread_id == t_uuid,
@@ -635,24 +672,20 @@ def get_messages(thread_id: str, db: Session = Depends(get_db), current_user: mo
         "created_at": m.created_at.strftime("%H:%M") if m.created_at else ""
     } for m in msgs]
 
-@router.post("/chat/send")
-def send_message(body: schemas.SendMessageSchema, db: Session = Depends(get_db), user: models.User = Depends(get_current_user)):
-    msg = models.ChatMessage(
-        thread_id=body.thread_id,
-        sender_id=user.id,
-        text=body.text,
-        file_url=body.file_url,
-        file_type=body.file_type,
-        file_name=body.file_name
-    )
-    db.add(msg)
-    thread = db.query(models.ChatThread).filter(models.ChatThread.id == body.thread_id).first()
-    if thread:
-        recipient_id = thread.student_id if str(user.id) == str(thread.employer_id) else thread.employer_id
-
-        sender_name = "کارفرما" if user.role == models.UserRole.COMPANY_REP else (user.student_profile.full_name if (user.student_profile and user.student_profile.full_name) else "دانشجو")
-
-        msg_preview = f"فایل پیوست: {body.file_name}" if body.file_url else (body.text[:35] if body.text else "پیام جدید")
+def post_chat_message(db: Session, thread: models.ChatThread, sender: models.User, text: Optional[str] = None,
+                      file_url: Optional[str] = None, file_type: Optional[str] = None, file_name: Optional[str] = None):
+    """Adds a message to the thread and notifies everyone else in it. The caller commits."""
+    db.add(models.ChatMessage(
+        thread_id=thread.id,
+        sender_id=sender.id,
+        text=text,
+        file_url=file_url,
+        file_type=file_type,
+        file_name=file_name,
+    ))
+    sender_name = display_name(sender)
+    msg_preview = f"فایل پیوست: {file_name}" if file_url else (text[:35] if text else "پیام جدید")
+    for recipient_id in thread_participants(thread) - {sender.id}:
         send_notification(
             db=db,
             user_id=recipient_id,
@@ -662,6 +695,11 @@ def send_message(body: schemas.SendMessageSchema, db: Session = Depends(get_db),
             link_id=str(thread.id)
         )
 
+
+@router.post("/chat/send")
+def send_message(body: schemas.SendMessageSchema, db: Session = Depends(get_db), user: models.User = Depends(get_current_user)):
+    thread = _member_thread(db, body.thread_id, user)
+    post_chat_message(db, thread, user, body.text, body.file_url, body.file_type, body.file_name)
     db.commit()
     return {"message": "پیام ارسال شد."}
 
