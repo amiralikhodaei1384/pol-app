@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List, Optional
+from datetime import datetime, timezone
 import uuid
 import re
 import os
@@ -270,6 +271,8 @@ def get_my_applications(db: Session = Depends(get_db), current_user: models.User
                 "interview_date": app.interview_date,
                 "interview_address": app.interview_address,
                 "interview_note": app.interview_note,
+                "decision_note": app.decision_note,
+                "decided_at_fa": to_shamsi(app.decided_at),
             })
     return result
 
@@ -318,6 +321,14 @@ def get_company_applications(
             "interview_date": a.interview_date,
             "interview_address": a.interview_address,
             "interview_note": a.interview_note,
+            "decision_note": a.decision_note,
+            "decided_at_fa": to_shamsi(a.decided_at),
+            # How many other projects already accepted this student.
+            "student_accepted_count": db.query(models.Application).filter(
+                models.Application.student_id == a.student_id,
+                models.Application.status == models.ApplicationStatus.ACCEPTED,
+                models.Application.id != a.id,
+            ).count(),
             "has_chat": chat is not None,
             "chat_thread_id": str(chat.id) if chat else None,
         })
@@ -432,18 +443,28 @@ def create_project(project_in: schemas.ProjectCreate, db: Session = Depends(get_
     db.refresh(new_project)
     return new_project
 
-@router.post("/applications/{app_id}/schedule-interview")
-def schedule_interview(app_id: str, body: schemas.ScheduleInterviewSchema, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+def get_company_application(db: Session, app_id: str, user: models.User) -> models.Application:
+    """The application, only if it belongs to one of the calling company's projects."""
+    if user.role != models.UserRole.COMPANY_REP or not user.company_rep_profile:
+        raise HTTPException(status_code=403, detail="تنها کارفرما مجاز است.")
     try:
-        a_uuid = uuid.UUID(app_id)
+        a_uuid = uuid.UUID(str(app_id))
     except ValueError:
-        a_uuid = app_id
-
-    app_obj = db.query(models.Application).filter(models.Application.id == a_uuid).first()
-    if not app_obj:
         raise HTTPException(status_code=404, detail="درخواست یافت نشد.")
 
+    app_obj = db.query(models.Application).filter(models.Application.id == a_uuid).first()
+    # Another company's application is reported as missing rather than confirming it exists.
+    if not app_obj or not app_obj.project or app_obj.project.company_id != user.company_rep_profile.company_id:
+        raise HTTPException(status_code=404, detail="درخواست یافت نشد.")
+    return app_obj
+
+@router.post("/applications/{app_id}/schedule-interview")
+def schedule_interview(app_id: str, body: schemas.ScheduleInterviewSchema, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    app_obj = get_company_application(db, app_id, current_user)
+
     app_obj.status = models.ApplicationStatus.SHORTLISTED
+    app_obj.decision_note = None
+    app_obj.decided_at = None
     app_obj.interview_date = body.interview_date
     app_obj.interview_address = body.interview_address
     app_obj.interview_note = body.interview_note
@@ -460,13 +481,45 @@ def schedule_interview(app_id: str, body: schemas.ScheduleInterviewSchema, db: S
     db.commit()
     return {"message": "دعوت به مصاحبه ثبت شد."}
 
+@router.post("/applications/{app_id}/decision")
+def decide_application(app_id: str, body: schemas.ApplicationDecisionSchema, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    app_obj = get_company_application(db, app_id, current_user)
+    decisions = {
+        "accepted": models.ApplicationStatus.ACCEPTED,
+        "rejected": models.ApplicationStatus.REJECTED,
+    }
+    if body.decision not in decisions:
+        raise HTTPException(status_code=400, detail="تصمیم نامعتبر است.")
+
+    note = (body.note or "").strip() or None
+    app_obj.status = decisions[body.decision]
+    app_obj.decision_note = note
+    app_obj.decided_at = datetime.now(timezone.utc)
+
+    project_title = app_obj.project.title if app_obj.project else ""
+    if body.decision == "accepted":
+        title = "تبریک! درخواست شما پذیرفته شد 🎉"
+        message = f"درخواست شما برای پروژه «{project_title}» پذیرفته شد."
+    else:
+        title = "نتیجه بررسی درخواست"
+        message = f"متأسفانه درخواست شما برای پروژه «{project_title}» این بار پذیرفته نشد."
+    if note:
+        message += f" پیام کارفرما: {note}"
+
+    send_notification(
+        db=db,
+        user_id=app_obj.student_id,
+        title=title,
+        message=message,
+        notif_type="decision",
+        link_id=str(app_obj.project_id),
+    )
+    db.commit()
+    return {"message": "نتیجه درخواست ثبت شد.", "status": body.decision}
+
 @router.post("/chat/start")
 def start_chat(app_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    if current_user.role != models.UserRole.COMPANY_REP:
-        raise HTTPException(status_code=403, detail="تنها کارفرما مجاز است.")
-    app_obj = db.query(models.Application).filter(models.Application.id == app_id).first()
-    if not app_obj:
-        raise HTTPException(status_code=404, detail="درخواست یافت نشد.")
+    app_obj = get_company_application(db, app_id, current_user)
     existing_thread = db.query(models.ChatThread).filter(models.ChatThread.application_id == app_obj.id).first()
     if existing_thread:
         return {"thread_id": str(existing_thread.id)}

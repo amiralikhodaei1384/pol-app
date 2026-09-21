@@ -43,6 +43,9 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
   String? _displayResumeName;
   String? _resumeServerPath;
 
+  // پروژه‌هایی که کارفرما دانشجو را در آن‌ها پذیرفته است (فقط‌خواندنی)
+  List<Map<String, dynamic>> _acceptedProjects = [];
+
   final _persianRegex = RegExp(r'^[\u0600-\u06FF\s]+$');
   final _phoneRegex = RegExp(r'^09\d{9}$');
 
@@ -118,6 +121,9 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
         if (p['portfolio_links'] != null) {
           _githubController.text = p['portfolio_links']['github'] ?? '';
           _figmaController.text = p['portfolio_links']['figma'] ?? '';
+        }
+        if (p['accepted_projects'] is List) {
+          _acceptedProjects = (p['accepted_projects'] as List).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
         }
         if (p['resume_file'] != null && p['resume_file'].toString().isNotEmpty) {
           final serverPath = p['resume_file'].toString();
@@ -692,6 +698,16 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
               _buildTopHeaderCard(),
               const SizedBox(height: 20),
 
+              if (_acceptedProjects.isNotEmpty) ...[
+                _buildSectionContainer(
+                  title: 'پروژه‌های پذیرفته‌شده',
+                  icon: Icons.workspace_premium_rounded,
+                  accentColor: const Color(0xFF10B981),
+                  children: [_buildAcceptedProjectsList()],
+                ),
+                const SizedBox(height: 20),
+              ],
+
               _buildSectionContainer(
                 title: 'اطلاعات شناسنامه‌ای و فردی',
                 icon: Icons.person_outline,
@@ -1092,10 +1108,50 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
               color: Colors.white.withOpacity(0.2),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Text('پروفایل فعال', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+            child: Text(
+              _acceptedProjects.isEmpty ? 'پروفایل فعال' : '✓ پذیرفته در ${_acceptedProjects.length} پروژه',
+              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+            ),
           )
         ],
       ),
+    );
+  }
+
+  Widget _buildAcceptedProjectsList() {
+    return Column(
+      children: _acceptedProjects.map((p) {
+        final meta = [p['company_name'], p['project_type']].where((x) => (x ?? '').toString().isNotEmpty).join(' • ');
+        final date = (p['decided_at_fa'] ?? '').toString();
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFECFDF5),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFA7F3D0)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.verified_rounded, size: 20, color: Color(0xFF10B981)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(p['project_title'] ?? '', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+                    if (meta.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(meta, style: const TextStyle(fontSize: 10, color: Color(0xFF047857))),
+                    ],
+                  ],
+                ),
+              ),
+              if (date.isNotEmpty) Text(date, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 

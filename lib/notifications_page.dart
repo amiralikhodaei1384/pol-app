@@ -76,7 +76,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
           ),
         ),
       );
-    } else if (type == 'interview') {
+    } else if (type == 'interview' || type == 'decision') {
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
@@ -146,6 +146,12 @@ class _NotificationsPageState extends State<NotificationsPage> {
                 iconBg = const Color(0xFFF3E5F5);
                 iconColor = Colors.purple;
                 actionText = 'بررسی رزومه متقاضی ◄';
+              } else if (type == 'decision') {
+                final accepted = (notif['title'] ?? '').toString().contains('پذیرفته شد');
+                iconData = accepted ? Icons.celebration_rounded : Icons.fact_check_outlined;
+                iconBg = accepted ? const Color(0xFFECFDF5) : const Color(0xFFF1F5F9);
+                iconColor = accepted ? const Color(0xFF10B981) : const Color(0xFF64748B);
+                actionText = 'مشاهده نتیجه درخواست ◄';
               } else if (type == 'admin') {
                 iconData = Icons.campaign_outlined;
                 iconBg = const Color(0xFFFEF3C7);

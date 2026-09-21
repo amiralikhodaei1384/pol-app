@@ -131,6 +131,10 @@ class Application(Base):
     interview_address = Column(String, nullable=True)
     interview_note = Column(Text, nullable=True)
 
+    # Set when the employer accepts or rejects the application.
+    decision_note = Column(Text, nullable=True)
+    decided_at = Column(DateTime(timezone=True), nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     project = relationship("Project", back_populates="applications")

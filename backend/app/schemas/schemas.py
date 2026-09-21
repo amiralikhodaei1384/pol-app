@@ -139,3 +139,8 @@ class EditMessageSchema(BaseModel):
 
 class ApplyProjectSchema(BaseModel):
     message: Optional[str] = None
+
+class ApplicationDecisionSchema(BaseModel):
+    # accepted | rejected
+    decision: str
+    note: Optional[str] = None

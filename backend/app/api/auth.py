@@ -175,8 +175,29 @@ def login(login_data: schemas.UserLogin, db: Session = Depends(get_db)):
     }
 
 
+def accepted_projects(db: Session, student_id) -> list:
+    """Projects this student was accepted into, newest first."""
+    from .projects import to_shamsi  # projects imports this module, so import lazily
+
+    apps = (
+        db.query(models.Application)
+        .filter(models.Application.student_id == student_id, models.Application.status == models.ApplicationStatus.ACCEPTED)
+        .order_by(models.Application.decided_at.desc())
+        .all()
+    )
+    return [
+        {
+            "project_title": a.project.title,
+            "company_name": a.project.company.name if a.project.company else "",
+            "project_type": a.project.project_type,
+            "decided_at_fa": to_shamsi(a.decided_at),
+        }
+        for a in apps if a.project
+    ]
+
+
 @router.get("/me")
-def get_me(current_user: models.User = Depends(get_current_user)):
+def get_me(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Return the current user's full profile."""
     role_str = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
 
@@ -203,6 +224,7 @@ def get_me(current_user: models.User = Depends(get_current_user)):
             "resume_file": p.resume_file,
             "portfolio_links": p.portfolio_links,
             "completion_percentage": calculate_profile_completion(p),
+            "accepted_projects": accepted_projects(db, current_user.id),
         }
     elif current_user.role == models.UserRole.COMPANY_REP and current_user.company_rep_profile:
         c = current_user.company_rep_profile.company

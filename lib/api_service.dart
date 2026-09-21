@@ -634,8 +634,8 @@ class ApiService {
     return null;
   }
 
-  /// Admin write calls return null on success, or the error message to show.
-  static Future<String?> _adminWrite(Future<http.Response> Function() send) async {
+  /// Write calls return null on success, or the error message to show.
+  static Future<String?> _write(Future<http.Response> Function() send) async {
     try {
       final res = await send().timeout(const Duration(seconds: 10));
       if (res.statusCode == 200) return null;
@@ -645,32 +645,39 @@ class ApiService {
     }
   }
 
-  static Future<String?> setUserActive(String token, String userId, bool isActive) => _adminWrite(() => client.patch(
+  /// Employer accepts or rejects an application; [decision] is 'accepted' or 'rejected'.
+  static Future<String?> decideApplication(String token, String appId, String decision, {String? note}) => _write(() => client.post(
+        Uri.parse("$baseUrl/projects/applications/$appId/decision"),
+        headers: _auth(token, json: true),
+        body: jsonEncode({"decision": decision, "note": note}),
+      ));
+
+  static Future<String?> setUserActive(String token, String userId, bool isActive) => _write(() => client.patch(
         Uri.parse("$baseUrl/admin/users/$userId/status"),
         headers: _auth(token, json: true),
         body: jsonEncode({"is_active": isActive}),
       ));
 
   static Future<String?> deleteUserAsAdmin(String token, String userId) =>
-      _adminWrite(() => client.delete(Uri.parse("$baseUrl/admin/users/$userId"), headers: _auth(token)));
+      _write(() => client.delete(Uri.parse("$baseUrl/admin/users/$userId"), headers: _auth(token)));
 
-  static Future<String?> setProjectActive(String token, String projectId, bool isActive) => _adminWrite(() => client.patch(
+  static Future<String?> setProjectActive(String token, String projectId, bool isActive) => _write(() => client.patch(
         Uri.parse("$baseUrl/admin/projects/$projectId/status"),
         headers: _auth(token, json: true),
         body: jsonEncode({"is_active": isActive}),
       ));
 
   static Future<String?> deleteProjectAsAdmin(String token, String projectId) =>
-      _adminWrite(() => client.delete(Uri.parse("$baseUrl/admin/projects/$projectId"), headers: _auth(token)));
+      _write(() => client.delete(Uri.parse("$baseUrl/admin/projects/$projectId"), headers: _auth(token)));
 
-  static Future<String?> addOption(String token, String kind, String name) => _adminWrite(() => client.post(
+  static Future<String?> addOption(String token, String kind, String name) => _write(() => client.post(
         Uri.parse("$baseUrl/admin/options/$kind"),
         headers: _auth(token, json: true),
         body: jsonEncode({"name": name}),
       ));
 
   static Future<String?> deleteOption(String token, String kind, String optionId) =>
-      _adminWrite(() => client.delete(Uri.parse("$baseUrl/admin/options/$kind/$optionId"), headers: _auth(token)));
+      _write(() => client.delete(Uri.parse("$baseUrl/admin/options/$kind/$optionId"), headers: _auth(token)));
 
   /// Returns how many users received it, or throws the server's message.
   static Future<int> sendBroadcast(String token, {required String title, required String message, required String audience}) async {

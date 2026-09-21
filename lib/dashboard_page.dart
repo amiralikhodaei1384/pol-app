@@ -589,6 +589,10 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
             final statusRaw = (app['status'] ?? 'applied').toString().toLowerCase();
 
             bool isShortlisted = statusRaw.contains('shortlisted');
+            final isAccepted = statusRaw.contains('accepted');
+            final isRejected = statusRaw.contains('rejected');
+            final decisionNote = (app['decision_note'] ?? '').toString().trim();
+            final decidedAt = (app['decided_at_fa'] ?? '').toString();
 
             Color statusColor = Colors.orange;
             Color statusBg = const Color(0xFFFFF3E0);
@@ -608,7 +612,13 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: isShortlisted ? const Color(0xFF1E6AFB) : const Color(0xFFE2E8F0)),
+                border: Border.all(
+                  color: isShortlisted
+                      ? const Color(0xFF1E6AFB)
+                      : isAccepted
+                          ? const Color(0xFF10B981)
+                          : const Color(0xFFE2E8F0),
+                ),
                 boxShadow: [
                   if (isShortlisted) BoxShadow(color: const Color(0xFF1E6AFB).withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 2))
                 ],
@@ -667,6 +677,55 @@ class _StudentDashboardViewState extends State<StudentDashboardView> {
                             const SizedBox(height: 4),
                             Text('یادداشت کارفرما: ${app['interview_note']}', style: const TextStyle(fontSize: 10, color: Colors.black54)),
                           ]
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  // نتیجه نهایی: پذیرش یا رد، همراه با پیام کارفرما
+                  if (isAccepted || isRejected) ...[
+                    const Divider(height: 20),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isAccepted ? const Color(0xFFECFDF5) : const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: isAccepted ? const Color(0xFFA7F3D0) : const Color(0xFFE2E8F0)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                isAccepted ? Icons.celebration_rounded : Icons.info_outline_rounded,
+                                size: 18,
+                                color: isAccepted ? const Color(0xFF10B981) : const Color(0xFF64748B),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  isAccepted
+                                      ? 'تبریک! شما برای این پروژه پذیرفته شدید.'
+                                      : 'این بار پذیرفته نشدید؛ پروژه‌های دیگر منتظر شما هستند.',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: isAccepted ? const Color(0xFF047857) : const Color(0xFF475569),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (decisionNote.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Text('پیام کارفرما: $decisionNote', style: const TextStyle(fontSize: 10.5, color: Color(0xFF334155), height: 1.5)),
+                          ],
+                          if (decidedAt.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text('تاریخ اعلام نتیجه: ${_toPersianDigits(decidedAt)}', style: const TextStyle(fontSize: 9.5, color: Colors.grey)),
+                          ],
                         ],
                       ),
                     ),
