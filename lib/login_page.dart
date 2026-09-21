@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'registration_page.dart';
 import 'dashboard_page.dart';
+import 'admin_dashboard_page.dart';
 import 'api_service.dart';
 import 'widgets/rotating_border.dart';
 import 'background.dart';
@@ -38,11 +39,22 @@ class _LoginPageState extends State<LoginPage> {
   void _nextStep() {
     if (_formKeyStep1.currentState!.validate()) {
       setState(() => _currentStep = 1);
+      _focusAfterSwitch(_passwordFocus);
     }
   }
 
   void _previousStep() {
     setState(() => _currentStep = 0);
+    _focusAfterSwitch(_emailFocus);
+  }
+
+  // AnimatedSwitcher keeps the outgoing field mounted (and focused) during the
+  // transition, so the new field's autofocus is skipped. Focus it explicitly
+  // once the new step has been built.
+  void _focusAfterSwitch(FocusNode node) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) node.requestFocus();
+    });
   }
 
   /// Logs in and saves the session locally.
@@ -57,19 +69,27 @@ class _LoginPageState extends State<LoginPage> {
 
       setState(() => _isLoading = false);
 
-      if (loginResult != null) {
+      if (loginResult != null && loginResult['error'] != null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(loginResult['error'].toString()), backgroundColor: const Color(0xFFDC2626)),
+          );
+        }
+      } else if (loginResult != null) {
         bool isCompany = loginResult['role'] == 'company_rep';
+        bool isAdmin = loginResult['role'] == 'admin';
         String token = loginResult['access_token'] ?? '';
 
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('access_token', token);
         await prefs.setBool('is_company', isCompany);
+        await prefs.setBool('is_admin', isAdmin);
 
         if (mounted) {
           Navigator.pushAndRemoveUntil(
             context,
             MaterialPageRoute(
-              builder: (context) => DashboardPage(isCompany: isCompany),
+              builder: (context) => isAdmin ? const AdminDashboardPage() : DashboardPage(isCompany: isCompany),
             ),
                 (route) => false,
           );

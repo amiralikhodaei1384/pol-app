@@ -204,7 +204,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
 
       final url = Uri.parse('${ApiService.baseUrl}/projects/');
 
-      final response = await http.post(
+      final response = await ApiService.client.post(
         url,
         headers: {
           'Content-Type': 'application/json',

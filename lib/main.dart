@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'login_page.dart';
 import 'dashboard_page.dart';
+import 'admin_dashboard_page.dart';
+import 'session_guard.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,10 +19,12 @@ class PolApp extends StatelessWidget {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token');
     final isCompany = prefs.getBool('is_company') ?? false;
+    final isAdmin = prefs.getBool('is_admin') ?? false;
 
     return {
       'isLoggedIn': token != null && token.isNotEmpty,
       'isCompany': isCompany,
+      'isAdmin': isAdmin,
     };
   }
 
@@ -29,6 +33,8 @@ class PolApp extends StatelessWidget {
     return MaterialApp(
       title: 'پل | Pol',
       debugShowCheckedModeBanner: false,
+      navigatorKey: SessionGuard.navigatorKey,
+      scaffoldMessengerKey: SessionGuard.messengerKey,
       theme: ThemeData(
         useMaterial3: true,
         fontFamily: 'Ravi',
@@ -52,6 +58,7 @@ class PolApp extends StatelessWidget {
           }
 
           if (snapshot.hasData && snapshot.data!['isLoggedIn'] == true) {
+            if (snapshot.data!['isAdmin'] == true) return const AdminDashboardPage();
             return DashboardPage(isCompany: snapshot.data!['isCompany']);
           }
 

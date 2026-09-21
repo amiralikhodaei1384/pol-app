@@ -1,9 +1,13 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:pol_app/session_guard.dart';
 
 /// HTTP client for the backend REST API.
 class ApiService {
+  /// Shared client for every request; logs the user out if the server reports their account as blocked.
+  static http.Client client = SessionGuardClient();
+
   /// Backend address for the current platform (Android emulator uses 10.0.2.2).
   static String get baseUrl {
     if (kIsWeb) {
@@ -24,7 +28,7 @@ class ApiService {
     String? companyAddress,
   }) async {
     try {
-      final res = await http.post(
+      final res = await client.post(
         Uri.parse("$baseUrl/auth/register"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
@@ -50,7 +54,7 @@ class ApiService {
     String? address,
   }) async {
     try {
-      final res = await http.post(
+      final res = await client.post(
         Uri.parse("$baseUrl/auth/company-profile"),
         headers: {
           "Content-Type": "application/json",
@@ -72,7 +76,7 @@ class ApiService {
   }
   static Future<Map<String, dynamic>?> login(String email, String password) async {
     try {
-      final res = await http.post(
+      final res = await client.post(
         Uri.parse("$baseUrl/auth/login"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"username": email, "password": password}),
@@ -80,6 +84,10 @@ class ApiService {
 
       if (res.statusCode == 200) {
         return jsonDecode(res.body);
+      }
+      // Blocked account: pass the server's message through instead of "wrong password".
+      if (res.statusCode == 403) {
+        return {'error': _detailOf(res) ?? 'حساب کاربری شما مسدود شده است.'};
       }
     } catch (e) {
       print("خطا در ورود: $e");
@@ -89,7 +97,7 @@ class ApiService {
 
   static Future<Map<String, dynamic>?> getMe(String token) async {
     try {
-      final res = await http.get(
+      final res = await client.get(
         Uri.parse("$baseUrl/auth/me"),
         headers: {"Authorization": "Bearer $token"},
       ).timeout(const Duration(seconds: 5));
@@ -105,7 +113,7 @@ class ApiService {
 
   static Future<Map<String, dynamic>?> fetchOptions() async {
     try {
-      final res = await http.get(Uri.parse("$baseUrl/projects/options"));
+      final res = await client.get(Uri.parse("$baseUrl/projects/options"));
       if (res.statusCode == 200) {
         return jsonDecode(res.body);
       }
@@ -134,7 +142,7 @@ class ApiService {
     String? resumeFile,
   }) async {
     try {
-      final res = await http.post(
+      final res = await client.post(
         Uri.parse("$baseUrl/auth/student-profile"),
         headers: {
           "Content-Type": "application/json",
@@ -186,7 +194,7 @@ class ApiService {
         ),
       );
 
-      var streamedResponse = await request.send();
+      var streamedResponse = await client.send(request);
       var response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -203,7 +211,7 @@ class ApiService {
 
   static Future<List<dynamic>> fetchAllProjects(String token) async {
     try {
-      final res = await http.get(
+      final res = await client.get(
         Uri.parse("$baseUrl/projects/"),
         headers: {"Authorization": "Bearer $token"},
       ).timeout(const Duration(seconds: 5));
@@ -250,7 +258,7 @@ class ApiService {
 
       uri = uri.replace(queryParameters: queryParams);
 
-      final res = await http.get(
+      final res = await client.get(
         uri,
         headers: {"Authorization": "Bearer $token"},
       ).timeout(const Duration(seconds: 5));
@@ -266,7 +274,7 @@ class ApiService {
 
   static Future<List<dynamic>> fetchRecommendedProjects(String token) async {
     try {
-      final res = await http.get(
+      final res = await client.get(
         Uri.parse("$baseUrl/projects/recommended"),
         headers: {"Authorization": "Bearer $token"},
       ).timeout(const Duration(seconds: 5));
@@ -282,7 +290,7 @@ class ApiService {
 
   static Future<List<dynamic>> fetchMyProjects(String token) async {
     try {
-      final res = await http.get(
+      final res = await client.get(
         Uri.parse("$baseUrl/projects/my-projects"),
         headers: {"Authorization": "Bearer $token"},
       ).timeout(const Duration(seconds: 5));
@@ -298,7 +306,7 @@ class ApiService {
 
   static Future<List<dynamic>> fetchMyApplications(String token) async {
     try {
-      final res = await http.get(
+      final res = await client.get(
         Uri.parse("$baseUrl/projects/my-applications"),
         headers: {"Authorization": "Bearer $token"},
       ).timeout(const Duration(seconds: 5));
@@ -314,7 +322,7 @@ class ApiService {
 
   static Future<bool> applyForProject(String token, String projectId, {String? message}) async {
     try {
-      final res = await http.post(
+      final res = await client.post(
         Uri.parse("$baseUrl/projects/$projectId/apply"),
         headers: {
           "Content-Type": "application/json",
@@ -337,7 +345,7 @@ class ApiService {
         uri = uri.replace(queryParameters: {'project_id': projectId});
       }
 
-      final res = await http.get(
+      final res = await client.get(
         uri,
         headers: {"Authorization": "Bearer $token"},
       ).timeout(const Duration(seconds: 5));
@@ -353,7 +361,7 @@ class ApiService {
 
   static Future<bool> scheduleInterview(String token, String appId, String date, String address, String note) async {
     try {
-      final res = await http.post(
+      final res = await client.post(
         Uri.parse("$baseUrl/projects/applications/$appId/schedule-interview"),
         headers: {
           "Content-Type": "application/json",
@@ -375,7 +383,7 @@ class ApiService {
 
   static Future<String?> startChat(String token, String appId) async {
     try {
-      final res = await http.post(
+      final res = await client.post(
         Uri.parse("$baseUrl/projects/chat/start?app_id=$appId"),
         headers: {"Authorization": "Bearer $token"},
       ).timeout(const Duration(seconds: 5));
@@ -391,7 +399,7 @@ class ApiService {
 
   static Future<List<dynamic>> fetchChatThreads(String token) async {
     try {
-      final res = await http.get(
+      final res = await client.get(
         Uri.parse("$baseUrl/projects/chat/threads"),
         headers: {"Authorization": "Bearer $token"},
       ).timeout(const Duration(seconds: 5));
@@ -407,7 +415,7 @@ class ApiService {
 
   static Future<List<dynamic>> fetchMessages(String token, String threadId) async {
     try {
-      final res = await http.get(
+      final res = await client.get(
         Uri.parse("$baseUrl/projects/chat/messages/$threadId"),
         headers: {"Authorization": "Bearer $token"},
       ).timeout(const Duration(seconds: 5));
@@ -430,7 +438,7 @@ class ApiService {
         String? fileName,
       }) async {
     try {
-      final res = await http.post(
+      final res = await client.post(
         Uri.parse("$baseUrl/projects/chat/send"),
         headers: {
           "Content-Type": "application/json",
@@ -453,7 +461,7 @@ class ApiService {
   }
   static Future<Map<String, dynamic>> fetchNotificationCounts(String token) async {
     try {
-      final res = await http.get(
+      final res = await client.get(
         Uri.parse("$baseUrl/projects/notifications/counts"),
         headers: {"Authorization": "Bearer $token"},
       ).timeout(const Duration(seconds: 5));
@@ -467,7 +475,7 @@ class ApiService {
 
   static Future<List<dynamic>> fetchNotifications(String token) async {
     try {
-      final res = await http.get(
+      final res = await client.get(
         Uri.parse("$baseUrl/projects/notifications/"),
         headers: {"Authorization": "Bearer $token"},
       ).timeout(const Duration(seconds: 5));
@@ -488,7 +496,7 @@ class ApiService {
       req.headers['Authorization'] = 'Bearer $token';
       req.files.add(http.MultipartFile.fromBytes('file', fileBytes, filename: fileName));
 
-      var streamedResponse = await req.send();
+      var streamedResponse = await client.send(req);
       var response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 200) {
@@ -502,7 +510,7 @@ class ApiService {
 
   static Future<bool> deleteProject(String token, String projectId) async {
     try {
-      final res = await http.delete(
+      final res = await client.delete(
         Uri.parse("$baseUrl/projects/$projectId"),
         headers: {"Authorization": "Bearer $token"},
       ).timeout(const Duration(seconds: 5));
@@ -516,7 +524,7 @@ class ApiService {
 
   static Future<bool> deleteChatMessage(String token, String messageId) async {
     try {
-      final res = await http.delete(
+      final res = await client.delete(
         Uri.parse("$baseUrl/projects/chat/messages/$messageId"),
         headers: {"Authorization": "Bearer $token"},
       ).timeout(const Duration(seconds: 5));
@@ -530,7 +538,7 @@ class ApiService {
 
   static Future<bool> deleteNotification(String token, String notificationId) async {
     try {
-      final res = await http.delete(
+      final res = await client.delete(
         Uri.parse("$baseUrl/projects/notifications/$notificationId"),
         headers: {"Authorization": "Bearer $token"},
       ).timeout(const Duration(seconds: 5));
@@ -543,7 +551,7 @@ class ApiService {
   }
   static Future<bool> editChatMessage(String token, String messageId, String newText) async {
     try {
-      final res = await http.put(
+      final res = await client.put(
         Uri.parse("$baseUrl/projects/chat/messages/$messageId"),
         headers: {
           "Content-Type": "application/json",
@@ -562,4 +570,121 @@ class ApiService {
     }
   }
 
+  // ---------------- پنل مدیریت ----------------
+
+  /// Error message FastAPI put in the response body, if any.
+  static String? _detailOf(http.Response res) {
+    try {
+      final body = jsonDecode(utf8.decode(res.bodyBytes));
+      if (body is Map && body['detail'] is String) return body['detail'];
+    } catch (_) {}
+    return null;
+  }
+
+  static Map<String, String> _auth(String token, {bool json = false}) => {
+        "Authorization": "Bearer $token",
+        if (json) "Content-Type": "application/json",
+      };
+
+  static Future<Map<String, dynamic>?> fetchAdminStats(String token) async {
+    try {
+      final res = await client.get(Uri.parse("$baseUrl/admin/stats"), headers: _auth(token)).timeout(const Duration(seconds: 8));
+      if (res.statusCode == 200) return jsonDecode(utf8.decode(res.bodyBytes));
+    } catch (e) {
+      print("خطا در دریافت آمار: $e");
+    }
+    return null;
+  }
+
+  static Future<List<dynamic>> fetchAdminUsers(String token, {String role = 'all', String search = ''}) async {
+    try {
+      final uri = Uri.parse("$baseUrl/admin/users").replace(queryParameters: {
+        'role': role,
+        if (search.trim().isNotEmpty) 'search': search.trim(),
+      });
+      final res = await client.get(uri, headers: _auth(token)).timeout(const Duration(seconds: 8));
+      if (res.statusCode == 200) return jsonDecode(utf8.decode(res.bodyBytes));
+    } catch (e) {
+      print("خطا در دریافت کاربران: $e");
+    }
+    return [];
+  }
+
+  static Future<List<dynamic>> fetchAdminProjects(String token, {String status = 'all', String search = ''}) async {
+    try {
+      final uri = Uri.parse("$baseUrl/admin/projects").replace(queryParameters: {
+        'status': status,
+        if (search.trim().isNotEmpty) 'search': search.trim(),
+      });
+      final res = await client.get(uri, headers: _auth(token)).timeout(const Duration(seconds: 8));
+      if (res.statusCode == 200) return jsonDecode(utf8.decode(res.bodyBytes));
+    } catch (e) {
+      print("خطا در دریافت پروژه‌ها: $e");
+    }
+    return [];
+  }
+
+  static Future<Map<String, dynamic>?> fetchAdminOptions(String token) async {
+    try {
+      final res = await client.get(Uri.parse("$baseUrl/admin/options"), headers: _auth(token)).timeout(const Duration(seconds: 8));
+      if (res.statusCode == 200) return jsonDecode(utf8.decode(res.bodyBytes));
+    } catch (e) {
+      print("خطا در دریافت اطلاعات پایه: $e");
+    }
+    return null;
+  }
+
+  /// Admin write calls return null on success, or the error message to show.
+  static Future<String?> _adminWrite(Future<http.Response> Function() send) async {
+    try {
+      final res = await send().timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200) return null;
+      return _detailOf(res) ?? 'عملیات با خطا مواجه شد (${res.statusCode}).';
+    } catch (e) {
+      return 'ارتباط با سرور برقرار نشد.';
+    }
+  }
+
+  static Future<String?> setUserActive(String token, String userId, bool isActive) => _adminWrite(() => client.patch(
+        Uri.parse("$baseUrl/admin/users/$userId/status"),
+        headers: _auth(token, json: true),
+        body: jsonEncode({"is_active": isActive}),
+      ));
+
+  static Future<String?> deleteUserAsAdmin(String token, String userId) =>
+      _adminWrite(() => client.delete(Uri.parse("$baseUrl/admin/users/$userId"), headers: _auth(token)));
+
+  static Future<String?> setProjectActive(String token, String projectId, bool isActive) => _adminWrite(() => client.patch(
+        Uri.parse("$baseUrl/admin/projects/$projectId/status"),
+        headers: _auth(token, json: true),
+        body: jsonEncode({"is_active": isActive}),
+      ));
+
+  static Future<String?> deleteProjectAsAdmin(String token, String projectId) =>
+      _adminWrite(() => client.delete(Uri.parse("$baseUrl/admin/projects/$projectId"), headers: _auth(token)));
+
+  static Future<String?> addOption(String token, String kind, String name) => _adminWrite(() => client.post(
+        Uri.parse("$baseUrl/admin/options/$kind"),
+        headers: _auth(token, json: true),
+        body: jsonEncode({"name": name}),
+      ));
+
+  static Future<String?> deleteOption(String token, String kind, String optionId) =>
+      _adminWrite(() => client.delete(Uri.parse("$baseUrl/admin/options/$kind/$optionId"), headers: _auth(token)));
+
+  /// Returns how many users received it, or throws the server's message.
+  static Future<int> sendBroadcast(String token, {required String title, required String message, required String audience}) async {
+    http.Response res;
+    try {
+      res = await client.post(
+        Uri.parse("$baseUrl/admin/broadcast"),
+        headers: _auth(token, json: true),
+        body: jsonEncode({"title": title, "message": message, "audience": audience}),
+      ).timeout(const Duration(seconds: 15));
+    } catch (e) {
+      throw 'ارتباط با سرور برقرار نشد.';
+    }
+    if (res.statusCode == 200) return (jsonDecode(utf8.decode(res.bodyBytes))['recipients'] as num).toInt();
+    throw _detailOf(res) ?? 'ارسال اعلان ناموفق بود.';
+  }
 }

@@ -146,6 +146,11 @@ class _NotificationsPageState extends State<NotificationsPage> {
                 iconBg = const Color(0xFFF3E5F5);
                 iconColor = Colors.purple;
                 actionText = 'بررسی رزومه متقاضی ◄';
+              } else if (type == 'admin') {
+                iconData = Icons.campaign_outlined;
+                iconBg = const Color(0xFFFEF3C7);
+                iconColor = const Color(0xFFB45309);
+                actionText = 'پیام مدیر سامانه';
               }
 
               return InkWell(

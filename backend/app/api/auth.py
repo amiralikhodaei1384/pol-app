@@ -79,12 +79,30 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     user = db.query(models.User).filter(models.User.email == email).first()
     if user is None:
         raise credentials_exception
+    if not user.is_active:
+        # The header lets the app tell "you were blocked" apart from ordinary 403s and log out.
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="حساب کاربری شما توسط مدیر مسدود شده است.",
+            headers={"X-Account-Blocked": "1"},
+        )
     return user
+
+
+def get_current_admin(current_user: models.User = Depends(get_current_user)) -> models.User:
+    """Like get_current_user, but only lets admins through."""
+    if current_user.role != models.UserRole.ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="تنها مدیر سامانه به این بخش دسترسی دارد.")
+    return current_user
 
 
 @router.post("/register", response_model=schemas.UserOut)
 def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
     """Create a student or company account."""
+    # Admin accounts are never self-service; they are created with create_admin.py.
+    if user_in.role not in (models.UserRole.STUDENT, models.UserRole.COMPANY_REP):
+        raise HTTPException(status_code=400, detail="نوع حساب نامعتبر است.")
+
     user = db.query(models.User).filter(models.User.email == user_in.email).first()
     if user:
         raise HTTPException(status_code=400, detail="این ایمیل قبلاً ثبت شده است.")
@@ -142,6 +160,8 @@ def login(login_data: schemas.UserLogin, db: Session = Depends(get_db)):
             detail="ایمیل یا رمز عبور اشتباه است.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="حساب کاربری شما توسط مدیر مسدود شده است.")
 
     role_str = user.role.value if hasattr(user.role, 'value') else str(user.role)
 

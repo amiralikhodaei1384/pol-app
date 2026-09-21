@@ -60,25 +60,32 @@ class _RegistrationPageState extends State<RegistrationPage> {
   void _nextStep() {
     if (_currentStep == 0) {
       if (_formKeyStep1.currentState!.validate()) {
-        if (_isCompany) {
-          setState(() => _currentStep = 1);
-        } else {
-          setState(() => _currentStep = 2);
-        }
+        _goToStep(_isCompany ? 1 : 2);
       }
     } else if (_currentStep == 1) {
       if (_formKeyStep2.currentState!.validate()) {
-        setState(() => _currentStep = 2);
+        _goToStep(2);
       }
     }
   }
 
   void _previousStep() {
     if (_currentStep == 2 && !_isCompany) {
-      setState(() => _currentStep = 0);
+      _goToStep(0);
     } else {
-      setState(() => _currentStep = _currentStep - 1);
+      _goToStep(_currentStep - 1);
     }
+  }
+
+  // AnimatedSwitcher keeps the outgoing field mounted (and focused) during the
+  // transition, so the new step's autofocus is skipped. Focus its first field
+  // explicitly once the new step has been built.
+  void _goToStep(int step) {
+    setState(() => _currentStep = step);
+    final firstField = [_emailFocus, _companyNameFocus, _passwordFocus][step];
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) firstField.requestFocus();
+    });
   }
 
   /// Registers, logs in automatically, then opens profile setup.

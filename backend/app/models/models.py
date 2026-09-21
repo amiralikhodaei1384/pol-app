@@ -37,6 +37,8 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     role = Column(Enum(UserRole), default=UserRole.STUDENT)
     is_verified = Column(Boolean, default=False)
+    # False = blocked by an admin: login is refused and existing tokens stop working.
+    is_active = Column(Boolean, nullable=False, default=True, server_default="true")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     student_profile = relationship("StudentProfile", back_populates="user", uselist=False)

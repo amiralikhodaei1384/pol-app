@@ -21,6 +21,14 @@ def reset_and_seed_db():
 
         seed_options(db)
 
+        admin_user = models.User(
+            email="admin@pol.ir",
+            password_hash=common_password,
+            role=models.UserRole.ADMIN,
+            is_verified=True
+        )
+        db.add(admin_user)
+
         student_user = models.User(
             email="amir@gmail.com",
             password_hash=common_password,
