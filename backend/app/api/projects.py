@@ -461,10 +461,10 @@ def get_company_application(db: Session, app_id: str, user: models.User) -> mode
 @router.post("/applications/{app_id}/schedule-interview")
 def schedule_interview(app_id: str, body: schemas.ScheduleInterviewSchema, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     app_obj = get_company_application(db, app_id, current_user)
+    if app_obj.status in (models.ApplicationStatus.ACCEPTED, models.ApplicationStatus.REJECTED):
+        raise HTTPException(status_code=400, detail="نتیجه این درخواست قبلاً ثبت شده است.")
 
     app_obj.status = models.ApplicationStatus.SHORTLISTED
-    app_obj.decision_note = None
-    app_obj.decided_at = None
     app_obj.interview_date = body.interview_date
     app_obj.interview_address = body.interview_address
     app_obj.interview_note = body.interview_note
@@ -490,6 +490,9 @@ def decide_application(app_id: str, body: schemas.ApplicationDecisionSchema, db:
     }
     if body.decision not in decisions:
         raise HTTPException(status_code=400, detail="تصمیم نامعتبر است.")
+    # Decisions are final: once the student has been told the result, it can't be changed.
+    if app_obj.status in (models.ApplicationStatus.ACCEPTED, models.ApplicationStatus.REJECTED):
+        raise HTTPException(status_code=400, detail="نتیجه این درخواست قبلاً ثبت شده و قابل تغییر نیست.")
 
     note = (body.note or "").strip() or None
     app_obj.status = decisions[body.decision]

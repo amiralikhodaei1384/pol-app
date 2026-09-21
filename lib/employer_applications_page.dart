@@ -192,8 +192,8 @@ class _EmployerApplicationsPageState extends State<EmployerApplicationsPage> {
         accept: accept,
         color: color,
         message: accept
-            ? 'درخواست «$student» برای پروژه «${app['project_title']}» پذیرفته می‌شود و به او اطلاع داده می‌شود. این پروژه در پروفایل دانشجو به‌عنوان پروژه پذیرفته‌شده نمایش داده خواهد شد.'
-            : 'درخواست «$student» برای پروژه «${app['project_title']}» رد می‌شود و نتیجه به او اطلاع داده می‌شود.',
+            ? 'درخواست «$student» برای پروژه «${app['project_title']}» پذیرفته می‌شود و به او اطلاع داده می‌شود. این پروژه در پروفایل دانشجو به‌عنوان پروژه پذیرفته‌شده نمایش داده خواهد شد.\nاین تصمیم نهایی است و بعداً قابل تغییر نیست.'
+            : 'درخواست «$student» برای پروژه «${app['project_title']}» رد می‌شود و نتیجه به او اطلاع داده می‌شود.\nاین تصمیم نهایی است و بعداً قابل تغییر نیست.',
         inputDecoration: _inputDec(accept ? 'مثلاً: زمان شروع همکاری و مدارک لازم...' : 'مثلاً: نیاز به تجربه بیشتر در ...'),
       ),
     );
@@ -240,78 +240,89 @@ class _EmployerApplicationsPageState extends State<EmployerApplicationsPage> {
             ),
             child: Text('$count متقاضی', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
           ),
-          const Spacer(),
-          if (!narrow) ...[
-            const Text('مرتب‌سازی بر اساس', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
-            const SizedBox(width: 8),
-          ] else
-            const SizedBox(width: 8),
+          const SizedBox(width: 8),
+          // Everything after the count is pushed to the row's end (the left side in RTL);
+          // Expanded + Align keeps it there while still letting the label shrink on phones.
+          Expanded(
+            child: Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!narrow) ...[
+                    const Text('مرتب‌سازی بر اساس', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                    const SizedBox(width: 8),
+                  ],
 
-          Flexible(
-            child: PopupMenuButton<String>(
-              tooltip: 'تغییر ترتیب نمایش متقاضیان',
-              padding: EdgeInsets.zero,
-              offset: const Offset(0, 44),
-              elevation: 10,
-              color: Colors.white,
-              shadowColor: Colors.black26,
-              constraints: const BoxConstraints(minWidth: 215),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: const BorderSide(color: Color(0xFFE2E8F0)),
-              ),
-              onSelected: (v) => setState(() => _sortBy = v),
-              itemBuilder: (context) => _sortLabels.keys.map((key) {
-                final selected = key == _sortBy;
-                return PopupMenuItem<String>(
-                  value: key,
-                  height: 42,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Row(
-                    children: [
-                      Icon(_sortIcons[key], size: 15, color: selected ? const Color(0xFF1E6AFB) : const Color(0xFF94A3B8)),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _sortLabels[key]!,
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: selected ? FontWeight.bold : FontWeight.w500,
-                            color: selected ? const Color(0xFF1E6AFB) : const Color(0xFF334155),
+                  Flexible(
+                    child: PopupMenuButton<String>(
+                      tooltip: 'تغییر ترتیب نمایش متقاضیان',
+                      padding: EdgeInsets.zero,
+                      offset: const Offset(0, 44),
+                      elevation: 10,
+                      color: Colors.white,
+                      shadowColor: Colors.black26,
+                      constraints: const BoxConstraints(minWidth: 215),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      onSelected: (v) => setState(() => _sortBy = v),
+                      itemBuilder: (context) => _sortLabels.keys.map((key) {
+                        final selected = key == _sortBy;
+                        return PopupMenuItem<String>(
+                          value: key,
+                          height: 42,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Row(
+                            children: [
+                              Icon(_sortIcons[key], size: 15, color: selected ? const Color(0xFF1E6AFB) : const Color(0xFF94A3B8)),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _sortLabels[key]!,
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: selected ? FontWeight.bold : FontWeight.w500,
+                                    color: selected ? const Color(0xFF1E6AFB) : const Color(0xFF334155),
+                                  ),
+                                ),
+                              ),
+                              if (selected) const Icon(Icons.check_rounded, size: 15, color: Color(0xFF1E6AFB)),
+                            ],
                           ),
+                        );
+                      }).toList(),
+
+                      // دکمه قرصی‌شکل که حالت فعلی را نشان می‌دهد
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.swap_vert_rounded, size: 15, color: Color(0xFF1E6AFB)),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                _sortLabels[_sortBy] ?? '',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            const Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: Color(0xFF64748B)),
+                          ],
                         ),
                       ),
-                      if (selected) const Icon(Icons.check_rounded, size: 15, color: Color(0xFF1E6AFB)),
-                    ],
-                  ),
-                );
-              }).toList(),
-
-              // دکمه قرصی‌شکل که حالت فعلی را نشان می‌دهد
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.swap_vert_rounded, size: 15, color: Color(0xFF1E6AFB)),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        _sortLabels[_sortBy] ?? '',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
-                      ),
                     ),
-                    const SizedBox(width: 2),
-                    const Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: Color(0xFF64748B)),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -695,7 +706,7 @@ class _EmployerApplicationsPageState extends State<EmployerApplicationsPage> {
                           ),
                         ),
 
-                      // ۳. پذیرش / رد؛ پس از تصمیم، فقط امکان تغییر آن می‌ماند
+                      // ۳. پذیرش / رد؛ تصمیم نهایی است و پس از ثبت، این دکمه‌ها حذف می‌شوند
                       if (!isDecided) ...[
                         ElevatedButton.icon(
                           onPressed: () => _showDecisionDialog(app, 'accepted'),
@@ -712,16 +723,7 @@ class _EmployerApplicationsPageState extends State<EmployerApplicationsPage> {
                             side: const BorderSide(color: Color(0xFFFCA5A5)),
                           ),
                         ),
-                      ] else
-                        TextButton.icon(
-                          onPressed: () => _showDecisionDialog(app, status == 'accepted' ? 'rejected' : 'accepted'),
-                          icon: const Icon(Icons.swap_horiz_rounded, size: 14),
-                          label: Text(
-                            status == 'accepted' ? 'تغییر به ردشده' : 'تغییر به پذیرفته‌شده',
-                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
-                          ),
-                          style: TextButton.styleFrom(foregroundColor: const Color(0xFF64748B)),
-                        ),
+                      ],
 
                       // ۴. دکمه شروع چت
                       OutlinedButton.icon(

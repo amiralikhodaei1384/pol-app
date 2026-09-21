@@ -127,22 +127,31 @@ void main() {
     expect(find.text('درخواست پذیرفته شد و به دانشجو اطلاع داده شد.'), findsOneWidget);
   });
 
-  testWidgets('a decided application offers to change the decision instead of accept/reject', (tester) async {
+  testWidgets('a decided application is final: no accept, reject, change or invite buttons', (tester) async {
     await pumpAt(tester, const Size(390, 844));
 
-    await tester.ensureVisible(find.text('پذیرفته‌شده (1)'));
-    await tester.tap(find.text('پذیرفته‌شده (1)'));
-    await tester.pumpAndSettle();
-    expect(find.text('پذیرش'), findsNothing);
-    expect(find.text('دعوت به مصاحبه حضوری'), findsNothing);
-    expect(find.text('تغییر به ردشده'), findsOneWidget);
-
-    await tester.tap(find.text('تغییر به ردشده'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ElevatedButton, 'رد درخواست'));
-    await tester.pumpAndSettle();
-
-    expect(decisions.single['decision'], 'rejected');
-    expect(find.text('ردشده (2)'), findsOneWidget);
+    for (final label in ['پذیرفته‌شده (1)', 'ردشده (1)']) {
+      await tester.ensureVisible(find.text(label));
+      await tester.tap(find.text(label));
+      await tester.pumpAndSettle();
+      expect(find.text('پذیرش'), findsNothing);
+      expect(find.widgetWithText(OutlinedButton, 'رد درخواست'), findsNothing);
+      expect(find.textContaining('تغییر به'), findsNothing);
+      expect(find.text('دعوت به مصاحبه حضوری'), findsNothing);
+      // Chat stays available.
+      expect(find.text('شروع چت'), findsOneWidget);
+    }
   });
+
+  for (final entry in {'phone': const Size(390, 844), 'desktop': const Size(1440, 900)}.entries) {
+    testWidgets('sort control sits at the left end of the header (${entry.key})', (tester) async {
+      await pumpAt(tester, entry.value);
+      final chevron = tester.getRect(find.byIcon(Icons.keyboard_arrow_down_rounded));
+      final count = tester.getRect(find.text('4 متقاضی'));
+      // RTL: the sort pill ends at the left edge (16px page padding + the pill's own padding),
+      // while the applicant count stays at the right edge.
+      expect(chevron.left, lessThan(40), reason: 'pill should hug the left edge, was at ${chevron.left}');
+      expect(count.right, greaterThan(entry.value.width - 40), reason: 'count should stay on the right, ended at ${count.right}');
+    });
+  }
 }
