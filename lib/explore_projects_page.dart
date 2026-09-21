@@ -133,7 +133,7 @@ class _ExploreProjectsPageState extends State<ExploreProjectsPage> {
                       },
                       style: const TextStyle(fontSize: 12),
                       decoration: InputDecoration(
-                        hintText: 'جستجو در $title (مثال: تایپ «ت»)...',
+                        hintText: 'جستجو در $title ...',
                         hintStyle: const TextStyle(fontSize: 11, color: Colors.grey),
                         prefixIcon: const Icon(Icons.search, size: 18, color: Color(0xFF1E6AFB)),
                         suffixIcon: modalSearchCtrl.text.isNotEmpty
