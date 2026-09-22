@@ -1144,24 +1144,41 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
             const SizedBox(width: 8),
           ],
           const Spacer(),
-          ElevatedButton.icon(
-            onPressed: _openEmployerApplications,
-            icon: const Icon(Icons.people, size: 16),
-            label: const Text('مدیریت متقاضیان', style: TextStyle(fontSize: 12)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: const Color(0xFF1E6AFB),
-              side: const BorderSide(color: Color(0xFFE5E7EB)),
+          // On phones the labelled buttons don't fit next to the icons, so show them as icons only.
+          if (isMobile) ...[
+            IconButton.outlined(
+              tooltip: 'مدیریت متقاضیان',
+              onPressed: _openEmployerApplications,
+              icon: const Icon(Icons.people, size: 18, color: Color(0xFF1E6AFB)),
+              style: IconButton.styleFrom(side: const BorderSide(color: Color(0xFFE5E7EB))),
             ),
-          ),
-          const SizedBox(width: 12),
-          ElevatedButton.icon(
-            onPressed: () => _openCreateProjectModal(context),
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('پروژه جدید', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E6AFB), foregroundColor: Colors.white),
-          ),
-          const SizedBox(width: 16),
+            const SizedBox(width: 6),
+            IconButton.filled(
+              tooltip: 'پروژه جدید',
+              onPressed: () => _openCreateProjectModal(context),
+              icon: const Icon(Icons.add, size: 20),
+              style: IconButton.styleFrom(backgroundColor: const Color(0xFF1E6AFB), foregroundColor: Colors.white),
+            ),
+          ] else ...[
+            ElevatedButton.icon(
+              onPressed: _openEmployerApplications,
+              icon: const Icon(Icons.people, size: 16),
+              label: const Text('مدیریت متقاضیان', style: TextStyle(fontSize: 12)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: const Color(0xFF1E6AFB),
+                side: const BorderSide(color: Color(0xFFE5E7EB)),
+              ),
+            ),
+            const SizedBox(width: 12),
+            ElevatedButton.icon(
+              onPressed: () => _openCreateProjectModal(context),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('پروژه جدید', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E6AFB), foregroundColor: Colors.white),
+            ),
+          ],
+          SizedBox(width: isMobile ? 8 : 16),
 
           _buildTopBarIcon(
             Icons.chat_bubble_outline,
@@ -1169,7 +1186,7 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
             badgeCount: _unreadChatsCount > 0 ? '$_unreadChatsCount' : '',
             onTap: _openChatThreads,
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: isMobile ? 6 : 10),
 
           _buildTopBarIcon(
             Icons.notifications_none,
@@ -1177,7 +1194,7 @@ class _CompanyDashboardViewState extends State<CompanyDashboardView> {
             badgeCount: _unreadNotificationsCount > 0 ? '$_unreadNotificationsCount' : '',
             onTap: _openNotifications,
           ),
-          const SizedBox(width: 16),
+          SizedBox(width: isMobile ? 8 : 16),
 
           ProfileMenuButton(
             name: _companyName,

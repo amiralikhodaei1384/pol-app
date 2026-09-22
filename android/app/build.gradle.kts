@@ -36,3 +36,19 @@ android {
 flutter {
     source = "../.."
 }
+
+// Debug builds talk to the backend at 127.0.0.1:8000; tunnel that port from the phone to this PC.
+// The mapping is lost whenever the phone reconnects, so re-create it on every debug build.
+val adbReverse by tasks.registering {
+    val adb = android.sdkDirectory.resolve("platform-tools/adb").absolutePath
+    doLast {
+        try {
+            val process = ProcessBuilder(adb, "reverse", "tcp:8000", "tcp:8000").redirectErrorStream(true).start()
+            val output = process.inputStream.bufferedReader().readText().trim()
+            if (process.waitFor() != 0) logger.warn("adb reverse failed: $output")
+        } catch (e: Exception) {
+            logger.warn("adb reverse failed: ${e.message}")
+        }
+    }
+}
+tasks.matching { it.name == "assembleDebug" }.configureEach { finalizedBy(adbReverse) }

@@ -191,9 +191,13 @@ class _NotificationsPageState extends State<NotificationsPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(notif['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B))),
+                                // Long titles (e.g. the acceptance one) wrap instead of pushing the date off-screen.
+                                Expanded(
+                                  child: Text(notif['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B))),
+                                ),
+                                const SizedBox(width: 8),
                                 Row(
                                   children: [
                                     Text(notif['created_at'] ?? '', style: const TextStyle(fontSize: 9, color: Colors.grey)),

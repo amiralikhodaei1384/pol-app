@@ -17,6 +17,7 @@ app.add_middleware(
 )
 
 os.makedirs("uploads/resumes", exist_ok=True)
+os.makedirs("uploads/chat", exist_ok=True)
 # Serve uploaded resumes and chat files.
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 

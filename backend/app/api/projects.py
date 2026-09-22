@@ -703,6 +703,27 @@ def send_message(body: schemas.SendMessageSchema, db: Session = Depends(get_db),
     db.commit()
     return {"message": "پیام ارسال شد."}
 
+@router.post("/chat/upload-file")
+async def upload_chat_file(
+        file: UploadFile = File(...),
+        current_user: models.User = Depends(get_current_user)
+):
+    """Store a chat attachment; the client then sends its URL with /chat/send."""
+    # basename() keeps a crafted filename from writing outside the chat folder.
+    original_name = os.path.basename(file.filename or "file")
+    file_ext = os.path.splitext(original_name)[1].lower()
+    file_type = "image" if file_ext in [".png", ".jpg", ".jpeg", ".webp", ".gif"] else "document"
+
+    new_filename = f"Chat_{uuid.uuid4().hex[:8]}_{original_name.replace(' ', '_')}"
+    with open(os.path.join(CHAT_UPLOAD_DIR, new_filename), "wb") as f:
+        f.write(await file.read())
+
+    return {
+        "file_url": f"/uploads/chat/{new_filename}",
+        "file_name": original_name,
+        "file_type": file_type,
+    }
+
 @router.put("/chat/messages/{message_id}")
 def edit_chat_message(
         message_id: str,
