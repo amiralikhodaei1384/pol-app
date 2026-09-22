@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:pol_app/session_guard.dart';
 
@@ -8,16 +7,9 @@ class ApiService {
   /// Shared client for every request; logs the user out if the server reports their account as blocked.
   static http.Client client = SessionGuardClient();
 
-  /// Backend address for the current platform (Android emulator uses 10.0.2.2).
-  static String get baseUrl {
-    if (kIsWeb) {
-      return "http://127.0.0.1:8000";
-    } else if (defaultTargetPlatform == TargetPlatform.android) {
-      return "http://10.0.2.2:8000";
-    } else {
-      return "http://127.0.0.1:8000";
-    }
-  }
+  /// Backend address. Android devices and emulators reach the PC's backend through
+  /// `adb reverse tcp:8000 tcp:8000`; override with `--dart-define=API_URL=...`.
+  static const String baseUrl = String.fromEnvironment('API_URL', defaultValue: "http://127.0.0.1:8000");
 
   static Future<bool> register({
     required String email,
